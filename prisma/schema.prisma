@@ -1,0 +1,27 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+}
+
+model Settings {
+  id                Int      @id @default(autoincrement())
+  currentDayType    String
+  adminPasswordHash String
+  schoolName        String
+  managerName       String
+  updatedAt         DateTime @updatedAt
+}
+
+model Period {
+  id        Int    @id @default(autoincrement())
+  dayType   String
+  order     Int
+  name      String  @default("")
+  startTime String
+  endTime   String
+
+  @@unique([dayType, order])
+}

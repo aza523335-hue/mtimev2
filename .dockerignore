@@ -1,0 +1,9 @@
+.git
+.next
+node_modules
+.turbo
+.vscode
+npm-debug.log*
+yarn-error.log*
+.env
+prisma/dev.db
