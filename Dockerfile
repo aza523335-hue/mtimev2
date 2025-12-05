@@ -1,10 +1,10 @@
-# syntax=docker/dockerfile:1
-
-FROM node:20-alpine AS base
+FROM node:20-bookworm-slim AS base
 WORKDIR /app
 
 FROM base AS deps
-RUN apk add --no-cache libc6-compat openssl
+RUN apt-get update \
+  && apt-get install -y ca-certificates openssl \
+  && rm -rf /var/lib/apt/lists/*
 COPY package.json package-lock.json ./
 RUN npm ci
 
@@ -23,7 +23,9 @@ RUN npm prune --omit=dev
 FROM base AS runner
 ENV NODE_ENV=production
 ENV NEXT_TELEMETRY_DISABLED=1
-RUN apk add --no-cache libc6-compat openssl
+RUN apt-get update \
+  && apt-get install -y ca-certificates openssl \
+  && rm -rf /var/lib/apt/lists/*
 COPY --from=builder /app/package.json ./package.json
 COPY --from=builder /app/node_modules ./node_modules
 COPY --from=builder /app/.next ./.next
