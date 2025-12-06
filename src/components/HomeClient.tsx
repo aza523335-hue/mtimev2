@@ -168,10 +168,6 @@ export const HomeClient = ({ initialData }: Props) => {
               {dayTypeLabel(data.dayType)}
             </span>
           </div>
-          <div className="flex items-center gap-2 text-xs text-slate-500">
-            <span className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
-            <span>تحديث تلقائي كل 12 ثانية</span>
-          </div>
           <div className="text-sm text-slate-600">
             الآن: <span className="font-semibold text-slate-800">{now.toLocaleTimeString("ar-EG")}</span>
           </div>

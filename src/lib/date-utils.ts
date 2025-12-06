@@ -24,6 +24,7 @@ const parseLocalizedNumber = (value: string) => {
 };
 
 export const getDateInfo = (now: Date = new Date()) => {
+  const hijriLocale = "ar-SA-u-ca-islamic-umalqura";
   const formatOrderedDate = (
     date: Date,
     locale: string,
@@ -93,7 +94,7 @@ export const getDateInfo = (now: Date = new Date()) => {
   let hijriMonthNumber: number;
   try {
     const parsedHijriMonth = parseLocalizedNumber(
-      new Intl.DateTimeFormat("ar-SA-u-ca-islamic", {
+      new Intl.DateTimeFormat(hijriLocale, {
         month: "numeric",
         timeZone: "Asia/Riyadh",
       }).format(now),
@@ -105,7 +106,7 @@ export const getDateInfo = (now: Date = new Date()) => {
 
     hijriDate = formatOrderedDate(
       now,
-      "ar-SA-u-ca-islamic",
+      hijriLocale,
       hijriMonthNumber,
       {
         weekday: "long",

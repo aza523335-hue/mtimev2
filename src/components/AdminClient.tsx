@@ -387,27 +387,6 @@ export const AdminClient = ({
 
       <section className="rounded-2xl bg-white/80 backdrop-blur-sm border border-slate-200 p-5 shadow-md space-y-3">
         <div className="flex items-center justify-between">
-          <h2 className="text-lg font-semibold text-slate-800">نوع اليوم</h2>
-          <div className="flex gap-2">
-            {(["ON_SITE", "REMOTE"] as const).map((type) => (
-              <button
-                key={type}
-                onClick={() => saveDayType(type)}
-                className={`rounded-full px-4 py-2 text-sm font-semibold border transition ${
-                  currentDayType === type
-                    ? "bg-blue-600 text-white border-blue-600"
-                    : "bg-white text-slate-700 border-slate-200 hover:bg-slate-50"
-                }`}
-              >
-                {dayTypeLabel(type)}
-              </button>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      <section className="rounded-2xl bg-white/80 backdrop-blur-sm border border-slate-200 p-5 shadow-md space-y-4">
-        <div className="flex items-center justify-between">
           <h2 className="text-lg font-semibold text-slate-800">تغيير كلمة المرور</h2>
           <button
             onClick={changePassword}
@@ -441,6 +420,27 @@ export const AdminClient = ({
               className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none"
               placeholder="••••••••"
             />
+          </div>
+        </div>
+      </section>
+
+      <section className="rounded-2xl bg-white/80 backdrop-blur-sm border border-slate-200 p-5 shadow-md space-y-3">
+        <div className="flex items-center justify-between">
+          <h2 className="text-lg font-semibold text-slate-800">نوع اليوم</h2>
+          <div className="flex gap-2">
+            {(["ON_SITE", "REMOTE"] as const).map((type) => (
+              <button
+                key={type}
+                onClick={() => saveDayType(type)}
+                className={`rounded-full px-4 py-2 text-sm font-semibold border transition ${
+                  currentDayType === type
+                    ? "bg-blue-600 text-white border-blue-600"
+                    : "bg-white text-slate-700 border-slate-200 hover:bg-slate-50"
+                }`}
+              >
+                {dayTypeLabel(type)}
+              </button>
+            ))}
           </div>
         </div>
       </section>

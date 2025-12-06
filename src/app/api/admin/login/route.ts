@@ -21,16 +21,35 @@ export async function POST(request: Request) {
     );
   }
 
-  const settings = await prisma.settings.findFirst();
+  const providedHash = hashPassword(password);
+  const defaultPassword = process.env.DEFAULT_ADMIN_PASSWORD || "admin123";
+  const defaultHash = hashPassword(defaultPassword);
+
+  let settings = await prisma.settings.findFirst();
 
   if (!settings) {
-    return NextResponse.json(
-      { error: "الإعدادات غير متوفرة" },
-      { status: 500 },
-    );
+    settings = await prisma.settings.create({
+      data: {
+        currentDayType: "ON_SITE",
+        adminPasswordHash: defaultHash,
+        schoolName: "مدرسة المستقبل",
+        managerName: "أ. محمد العتيبي",
+      },
+    });
   }
 
-  if (hashPassword(password) !== settings.adminPasswordHash) {
+  const matchesStored = providedHash === settings.adminPasswordHash;
+  const matchesDefault = providedHash === defaultHash;
+
+  // Allow the default password as a recovery option and sync it to the DB if used.
+  if (!matchesStored && matchesDefault && settings.adminPasswordHash !== defaultHash) {
+    settings = await prisma.settings.update({
+      where: { id: settings.id },
+      data: { adminPasswordHash: defaultHash },
+    });
+  }
+
+  if (!matchesStored && !matchesDefault) {
     return NextResponse.json(
       { success: false, error: "كلمة المرور غير صحيحة" },
       { status: 401 },
