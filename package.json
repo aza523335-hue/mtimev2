@@ -12,10 +12,10 @@
   },
   "dependencies": {
     "@libsql/client": "^0.15.15",
-    "@prisma/adapter-libsql": "^7.0.1",
-    "@prisma/client": "^7.0.1",
+    "@prisma/adapter-libsql": "^7.1.0",
+    "@prisma/client": "^7.1.0",
     "hijri-date": "^0.2.2",
-    "next": "16.0.6",
+    "next": "^16.0.7",
     "react": "19.2.0",
     "react-dom": "19.2.0"
   },
@@ -27,7 +27,7 @@
     "babel-plugin-react-compiler": "1.0.0",
     "eslint": "^9",
     "eslint-config-next": "16.0.6",
-    "prisma": "^7.0.1",
+    "prisma": "^7.1.0",
     "tailwindcss": "^4",
     "typescript": "^5"
   },
