@@ -14,6 +14,7 @@ ARG DATABASE_URL=file:./prisma/dev.db
 ENV DATABASE_URL=${DATABASE_URL}
 COPY prisma ./prisma
 COPY tsconfig.json next.config.ts postcss.config.mjs eslint.config.mjs ./
+COPY prisma.config.ts ./prisma.config.ts
 COPY src ./src
 COPY public ./public
 RUN npx prisma generate
