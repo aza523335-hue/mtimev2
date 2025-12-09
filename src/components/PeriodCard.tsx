@@ -1,3 +1,5 @@
+import { parseTimeInTimeZone } from "@/lib/date-utils";
+
 type Period = {
   id: number;
   order: number;
@@ -21,17 +23,8 @@ const formatCountdown = (ms: number) => {
   return `${hours}:${minutes}:${seconds}`;
 };
 
-const parseTime = (time: string) => {
-  const [hour = "0", minute = "0"] = time.split(":");
-  const base = new Date();
-  return new Date(
-    base.getFullYear(),
-    base.getMonth(),
-    base.getDate(),
-    Number(hour),
-    Number(minute),
-  );
-};
+const parseTime = (time: string, base: Date) =>
+  parseTimeInTimeZone(time, base);
 
 type Props = {
   period: Period;
@@ -39,8 +32,8 @@ type Props = {
 };
 
 export const PeriodCard = ({ period, now }: Props) => {
-  const start = parseTime(period.startTime);
-  const end = parseTime(period.endTime);
+  const start = parseTime(period.startTime, now);
+  const end = parseTime(period.endTime, now);
 
   let status: "upcoming" | "current" | "done" = "done";
   if (now < start) {

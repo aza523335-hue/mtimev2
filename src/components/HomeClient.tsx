@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 
-import { dayTypeLabel } from "@/lib/date-utils";
+import { dayTypeLabel, parseTimeInTimeZone } from "@/lib/date-utils";
 
 import { HeaderCard } from "./HeaderCard";
 import { PeriodCard } from "./PeriodCard";
@@ -34,16 +34,8 @@ type Props = {
   initialData: PeriodsPayload;
 };
 
-const parseTimeForDate = (time: string, baseDate: Date) => {
-  const [hour = "0", minute = "0"] = time.split(":");
-  return new Date(
-    baseDate.getFullYear(),
-    baseDate.getMonth(),
-    baseDate.getDate(),
-    Number(hour),
-    Number(minute),
-  );
-};
+const parseTimeForDate = (time: string, baseDate: Date) =>
+  parseTimeInTimeZone(time, baseDate);
 
 const normalizePeriods = (baseDate: Date, periods: Period[]) => {
   const dayMs = 24 * 60 * 60 * 1000;
