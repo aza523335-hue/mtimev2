@@ -325,7 +325,15 @@ export const HomeClient = ({ initialData }: Props) => {
             </span>
           </div>
           <div className="text-sm md:text-lg text-slate-700 md:col-span-1 md:text-center">
-            الآن: <span className="font-semibold md:font-bold md:text-xl text-slate-900">{now.toLocaleTimeString("ar-EG")}</span>
+            الآن:{" "}
+            <span className="font-semibold md:font-bold md:text-xl text-slate-900">
+              {new Intl.DateTimeFormat("ar-EG", {
+                hour: "2-digit",
+                minute: "2-digit",
+                second: "2-digit",
+                timeZone: "Asia/Riyadh",
+              }).format(now)}
+            </span>
           </div>
           <div className="md:col-span-1 md:justify-self-center">
             <button
