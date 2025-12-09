@@ -68,14 +68,14 @@ export const PeriodCard = ({ period, now }: Props) => {
 
   const accent =
     status === "current"
-      ? "bg-emerald-100 border-2 border-emerald-300 text-emerald-900 shadow-[0_18px_45px_-18px_rgba(16,185,129,0.5)] ring-2 ring-emerald-200/60"
+      ? "bg-emerald-200 border-2 border-emerald-400 text-emerald-900 shadow-[0_18px_45px_-18px_rgba(16,185,129,0.55)] ring-2 ring-emerald-300/70"
       : status === "upcoming"
-        ? "bg-blue-100 border-2 border-blue-300 text-blue-900"
-        : "bg-slate-100 border-2 border-slate-300 text-slate-800";
+        ? "bg-blue-200 border-2 border-blue-400 text-blue-900"
+        : "bg-slate-200 border-2 border-slate-400 text-slate-800";
 
   return (
     <div
-      className={`relative overflow-hidden rounded-2xl border p-4 space-y-3 transition transform hover:-translate-y-1 hover:shadow-2xl ${accent}`}
+      className={`relative overflow-hidden rounded-2xl border p-4 md:p-5 space-y-3 transition transform hover:-translate-y-1 hover:shadow-2xl ${accent}`}
     >
       {isCurrent && (
         <div
@@ -84,33 +84,33 @@ export const PeriodCard = ({ period, now }: Props) => {
         />
       )}
       <div className="flex items-center justify-between">
-        <span className="text-sm font-semibold">
+        <span className="text-sm md:text-lg font-semibold md:font-bold">
           {displayName}
         </span>
-        <span className={`text-xs px-3 py-1 rounded-full ${badgeClass}`}>
+        <span className={`text-xs md:text-sm lg:text-base px-3 py-1 rounded-full font-semibold md:font-bold ${badgeClass}`}>
           {statusLabel}
         </span>
       </div>
 
-      <div className="flex items-center justify-between text-slate-600 text-sm">
+      <div className="flex items-center justify-between text-slate-600 text-sm md:text-lg font-normal md:font-semibold">
         <span>البداية: {period.startTime}</span>
         <span>النهاية: {period.endTime}</span>
       </div>
 
       {isCurrent && (
-        <div className="text-center text-emerald-700 font-semibold">
+        <div className="text-center text-emerald-700 font-semibold md:font-bold md:text-xl">
           ينتهي خلال: <span className="font-bold">{countdown}</span>
         </div>
       )}
 
       {isUpcoming && (
-        <div className="text-center text-amber-700 font-semibold">
+        <div className="text-center text-amber-700 font-semibold md:font-bold md:text-xl">
           يبدأ خلال: <span className="font-bold">{countdown}</span>
         </div>
       )}
 
       {!isCurrent && !isUpcoming && (
-        <div className="text-center text-slate-500 text-sm">انتهت</div>
+        <div className="text-center text-slate-500 text-sm md:text-lg font-normal md:font-semibold">انتهت</div>
       )}
     </div>
   );

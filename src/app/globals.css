@@ -28,3 +28,26 @@ body {
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
 }
+
+/* تكبير تدريجي للخط على الشاشات الأكبر مع الحفاظ على حجم الهاتف */
+:root {
+  font-size: 16px;
+}
+
+@media (min-width: 768px) {
+  :root {
+    font-size: 17px;
+  }
+}
+
+@media (min-width: 1024px) {
+  :root {
+    font-size: 18px;
+  }
+}
+
+@media (min-width: 1280px) {
+  :root {
+    font-size: 19px;
+  }
+}

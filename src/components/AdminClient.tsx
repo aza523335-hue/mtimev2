@@ -18,6 +18,9 @@ type SettingsShape = {
   schoolName: string;
   managerName: string;
   currentDayType: string;
+  autoDayTypeEnabled: boolean;
+  onSiteDays: number[];
+  remoteDays: number[];
 };
 
 type Props = {
@@ -44,6 +47,13 @@ export const AdminClient = ({
     managerName: settings.managerName,
   });
   const [currentDayType, setCurrentDayType] = useState(settings.currentDayType);
+  const [autoDayTypeEnabled, setAutoDayTypeEnabled] = useState(
+    settings.autoDayTypeEnabled,
+  );
+  const [autoDays, setAutoDays] = useState<Record<"ON_SITE" | "REMOTE", number[]>>({
+    ON_SITE: settings.onSiteDays,
+    REMOTE: settings.remoteDays,
+  });
   const [editDayType, setEditDayType] = useState<"ON_SITE" | "REMOTE">(
     "ON_SITE",
   );
@@ -60,6 +70,16 @@ export const AdminClient = ({
   const editingPeriods = useMemo(() => {
     return [...periods[editDayType]].sort((a, b) => a.order - b.order);
   }, [editDayType, periods]);
+
+  const dayOptions = [
+    { value: 0, label: "الأحد" },
+    { value: 1, label: "الاثنين" },
+    { value: 2, label: "الثلاثاء" },
+    { value: 3, label: "الأربعاء" },
+    { value: 4, label: "الخميس" },
+    { value: 5, label: "الجمعة" },
+    { value: 6, label: "السبت" },
+  ];
 
   const handleLogin = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -124,6 +144,37 @@ export const AdminClient = ({
     }
   };
 
+  const saveAutoDayType = async () => {
+    setBusy(true);
+    setMessage(null);
+    setError(null);
+
+    const res = await fetch("/api/admin/update-auto-day-type", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        autoDayTypeEnabled,
+        onSiteDays: autoDays.ON_SITE,
+        remoteDays: autoDays.REMOTE,
+      }),
+    });
+
+    setBusy(false);
+
+    if (res.ok) {
+      const payload = await res.json().catch(() => ({}));
+      const appliedType =
+        payload?.appliedDayType ||
+        payload?.settings?.currentDayType ||
+        currentDayType;
+      setCurrentDayType(appliedType);
+      setMessage("تم حفظ التبديل التلقائي");
+    } else {
+      const payload = await res.json().catch(() => ({}));
+      setError(payload?.error || "تعذر حفظ التبديل التلقائي");
+    }
+  };
+
   const savePeriods = async () => {
     setBusy(true);
     setMessage(null);
@@ -183,7 +234,7 @@ export const AdminClient = ({
 
   const updateStartAndDuration = (order: number, startTime: string) => {
     setPeriods((prev) => {
-    const list = prev[editDayType].map((p) => {
+      const list = prev[editDayType].map((p) => {
         if (p.order !== order) return p;
         const duration = getDuration(p);
         const newEnd = toTimeString(toMinutes(startTime) + duration);
@@ -195,7 +246,7 @@ export const AdminClient = ({
 
   const updateDurationMinutes = (order: number, minutes: number) => {
     setPeriods((prev) => {
-    const list = prev[editDayType].map((p) => {
+      const list = prev[editDayType].map((p) => {
         if (p.order !== order) return p;
         const startMins = toMinutes(p.startTime);
         const newEnd = toTimeString(startMins + Math.max(0, minutes));
@@ -242,6 +293,19 @@ export const AdminClient = ({
     });
   };
 
+  const toggleDaySelection = (type: "ON_SITE" | "REMOTE", day: number) => {
+    setAutoDays((prev) => {
+      const exists = prev[type].includes(day);
+      const nextList = exists
+        ? prev[type].filter((d) => d !== day)
+        : [...prev[type], day];
+      return {
+        ...prev,
+        [type]: nextList.sort((a, b) => a - b),
+      };
+    });
+  };
+
   const changePassword = async () => {
     setBusy(true);
     setMessage(null);
@@ -275,86 +339,108 @@ export const AdminClient = ({
     setMessage("تم تسجيل الخروج");
   };
 
+  const panelClass =
+    "rounded-2xl border border-slate-200 bg-white/80 backdrop-blur shadow-sm";
+
   if (!isAuthed) {
     return (
-      <div className="max-w-md mx-auto rounded-2xl bg-white p-6 shadow-sm border border-slate-200">
-        <h1 className="text-xl font-bold text-slate-800 mb-2 text-center">
-          دخول المدير
-        </h1>
-        <p className="text-sm text-slate-600 mb-4 text-center">
-          هذه الصفحة محمية. أدخل كلمة المرور للمتابعة.
-        </p>
-        <form onSubmit={handleLogin} className="space-y-4">
-          <div className="space-y-2">
-            <label className="text-sm text-slate-700">كلمة المرور</label>
-            <input
-              type="password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none"
-              placeholder="••••••••"
-            />
-          </div>
-          <button
-            type="submit"
-            disabled={busy}
-            className="w-full rounded-xl bg-blue-600 text-white py-2 font-semibold hover:bg-blue-700 transition disabled:opacity-60"
-          >
-            {busy ? "جاري التحقق..." : "تسجيل الدخول"}
-          </button>
-          {error && (
-            <div className="text-sm text-red-600 bg-red-50 border border-red-100 rounded-lg p-2">
-              {error}
+      <div className="max-w-md mx-auto">
+        <div className="relative overflow-hidden rounded-3xl border border-slate-200 bg-gradient-to-br from-slate-900 via-slate-800 to-indigo-900 p-8 text-white shadow-2xl">
+          <div className="absolute inset-0 opacity-30 bg-[radial-gradient(circle_at_20%_20%,rgba(255,255,255,0.35),transparent_40%),radial-gradient(circle_at_80%_0%,rgba(255,255,255,0.2),transparent_35%)]" />
+          <div className="relative space-y-6">
+            <div className="space-y-1 text-center">
+              <p className="text-sm text-white/70">لوحة المدير</p>
+              <h1 className="text-2xl font-bold">دخول آمن</h1>
+              <p className="text-xs text-white/60">
+                أدخل كلمة المرور للمتابعة إلى إدارة الجدول.
+              </p>
             </div>
-          )}
-        </form>
+            <form onSubmit={handleLogin} className="space-y-4">
+              <div className="space-y-2">
+                <label className="text-sm text-white/80">كلمة المرور</label>
+                <input
+                  type="password"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  className="w-full rounded-xl border border-white/20 bg-white/10 px-3 py-2 text-sm text-white placeholder-white/50 focus:border-white focus:outline-none focus:ring-1 focus:ring-white"
+                  placeholder="••••••••"
+                />
+              </div>
+              <button
+              type="submit"
+              disabled={busy}
+              className="w-full rounded-xl bg-gradient-to-r from-indigo-600 via-violet-600 to-purple-600 text-white py-2 font-semibold shadow-sm hover:opacity-95 transition disabled:opacity-60"
+            >
+              {busy ? "جاري التحقق..." : "تسجيل الدخول"}
+            </button>
+              {error && (
+                <div className="text-sm text-red-100 bg-red-500/30 border border-red-200/40 rounded-lg p-2">
+                  {error}
+                </div>
+              )}
+            </form>
+          </div>
+        </div>
       </div>
     );
   }
 
   return (
-    <div className="space-y-5">
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <div>
-          <p className="text-sm text-slate-500">لوحة تحكم المدير</p>
-          <h1 className="text-2xl font-bold text-slate-800">إدارة الجدول</h1>
-        </div>
-        <div className="flex items-center gap-3 text-xs text-slate-500">
-          اليوم الحالي: {dayTypeLabel(currentDayType)}
-          <Link
-            href="/"
-            className="rounded-full bg-slate-900 text-white px-3 py-1 text-xs font-semibold hover:bg-slate-800 transition"
-          >
-            العودة للرئيسية
-          </Link>
-          <button
-            onClick={logout}
-            disabled={loggingOut}
-            className="rounded-full border border-slate-300 text-slate-700 px-3 py-1 text-xs font-semibold hover:bg-slate-100 transition disabled:opacity-60"
-          >
-            {loggingOut ? "يجري تسجيل الخروج..." : "تسجيل الخروج"}
-          </button>
+    <div className="space-y-6">
+      <div className="relative overflow-hidden rounded-3xl border border-slate-200 bg-gradient-to-l from-indigo-700 via-violet-700 to-purple-700 text-white p-6 sm:p-8 shadow-xl">
+        <div className="absolute inset-0 opacity-30 bg-[radial-gradient(circle_at_10%_10%,rgba(255,255,255,0.3),transparent_35%),radial-gradient(circle_at_80%_0%,rgba(255,255,255,0.2),transparent_45%)]" />
+        <div className="relative flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+          <div className="space-y-2">
+            <p className="text-sm text-white/70">لوحة تحكم المدير</p>
+            <h1 className="text-2xl sm:text-3xl font-bold">إدارة الجدول</h1>
+            <p className="text-xs sm:text-sm text-white/60">
+              تحكم سريع في بيانات المدرسة والأيام وأوقات الحصص.
+            </p>
+          </div>
+          <div className="flex flex-wrap items-center gap-2 sm:gap-3 text-xs font-semibold">
+            <span className="rounded-full bg-white/15 border border-white/20 px-4 py-2 text-white">
+              اليوم الحالي: {dayTypeLabel(currentDayType)}
+            </span>
+            <Link
+              href="/"
+              className="rounded-full bg-gradient-to-r from-indigo-600 via-violet-600 to-purple-600 text-white px-4 py-2 shadow-sm hover:opacity-95 transition"
+            >
+              العودة للرئيسية
+            </Link>
+            <div className="w-full flex justify-center md:w-auto md:justify-start">
+              <button
+                onClick={logout}
+                disabled={loggingOut}
+                className="rounded-full border border-white/40 text-white px-4 py-2 hover:bg-white/15 transition disabled:opacity-60"
+              >
+                {loggingOut ? "يجري تسجيل الخروج..." : "تسجيل الخروج"}
+              </button>
+            </div>
+          </div>
         </div>
       </div>
 
       {message && (
-        <div className="bg-emerald-50 border border-emerald-100 text-emerald-700 text-sm rounded-lg p-3 shadow-sm">
+        <div className="bg-emerald-50 border border-emerald-100 text-emerald-700 text-sm rounded-xl p-3 shadow-sm">
           {message}
         </div>
       )}
       {error && (
-        <div className="bg-red-50 border border-red-100 text-red-700 text-sm rounded-lg p-3 shadow-sm">
+        <div className="bg-red-50 border border-red-100 text-red-700 text-sm rounded-xl p-3 shadow-sm">
           {error}
         </div>
       )}
 
-      <section className="rounded-2xl bg-white/80 backdrop-blur-sm border border-slate-200 p-5 shadow-md space-y-3">
-        <div className="flex items-center justify-between">
-          <h2 className="text-lg font-semibold text-slate-800">بيانات الرأس</h2>
+      <section className={`${panelClass} p-5 space-y-4`}>
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <h2 className="text-lg font-semibold text-slate-900">بيانات المدرسة</h2>
+            <p className="text-xs text-slate-500">تظهر في رأس الصفحة الرئيسية</p>
+          </div>
           <button
             onClick={saveHeader}
             disabled={busy}
-            className="rounded-lg bg-blue-600 text-white px-4 py-2 text-sm font-semibold hover:bg-blue-700 transition disabled:opacity-60"
+            className="rounded-lg bg-gradient-to-r from-indigo-600 via-violet-600 to-purple-600 text-white px-4 py-2 text-sm font-semibold shadow-sm hover:opacity-95 transition disabled:opacity-60"
           >
             حفظ
           </button>
@@ -367,7 +453,7 @@ export const AdminClient = ({
               onChange={(e) =>
                 setHeader((prev) => ({ ...prev, schoolName: e.target.value }))
               }
-              className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none"
+              className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm focus:border-slate-900 focus:ring-2 focus:ring-slate-200 focus:outline-none"
               placeholder="اسم المدرسة"
             />
           </div>
@@ -378,81 +464,173 @@ export const AdminClient = ({
               onChange={(e) =>
                 setHeader((prev) => ({ ...prev, managerName: e.target.value }))
               }
-              className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none"
+              className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm focus:border-slate-900 focus:ring-2 focus:ring-slate-200 focus:outline-none"
               placeholder="اسم المدير"
             />
           </div>
         </div>
       </section>
 
-      <section className="rounded-2xl bg-white/80 backdrop-blur-sm border border-slate-200 p-5 shadow-md space-y-3">
-        <div className="flex items-center justify-between">
-          <h2 className="text-lg font-semibold text-slate-800">تغيير كلمة المرور</h2>
-          <button
-            onClick={changePassword}
-            disabled={busy}
-            className="rounded-lg bg-slate-900 text-white px-4 py-2 text-sm font-semibold hover:bg-slate-800 transition disabled:opacity-60"
-          >
-            حفظ كلمة المرور
-          </button>
+      <section className={`${panelClass} p-5 space-y-4`}>
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <h2 className="text-lg font-semibold text-slate-900">نوع اليوم</h2>
+            <p className="text-xs text-slate-500">تحويل فوري بين حضوري وعن بعد</p>
+          </div>
+          <span className="text-xs text-slate-500">الوضع الحالي: {dayTypeLabel(currentDayType)}</span>
         </div>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+          {(["ON_SITE", "REMOTE"] as const).map((type) => (
+            <button
+              key={type}
+              onClick={() => saveDayType(type)}
+              className={`rounded-xl px-4 py-3 text-sm font-semibold border transition text-center ${
+                currentDayType === type
+                  ? "bg-gradient-to-r from-indigo-600 to-violet-600 text-white border-transparent shadow-sm"
+                  : "bg-white text-slate-800 border-slate-200 hover:border-indigo-200 hover:text-indigo-700"
+              }`}
+            >
+              {dayTypeLabel(type)}
+            </button>
+          ))}
+        </div>
+      </section>
+
+      <section className={`${panelClass} p-5 space-y-4`}>
+        <div className="flex flex-col gap-1">
+          <h2 className="text-lg font-semibold text-slate-900">تغيير كلمة المرور</h2>
+          <p className="text-xs text-slate-500">استخدم كلمة قوية سهلة التذكر</p>
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
           <div className="space-y-1">
-            <label className="text-xs text-slate-500">كلمة المرور الحالية</label>
+            <label className="text-xs text-slate-500">الحالية</label>
             <input
               type="password"
               value={passwords.current}
               onChange={(e) =>
                 setPasswords((prev) => ({ ...prev, current: e.target.value }))
               }
-              className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none"
+              className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:border-slate-900 focus:ring-2 focus:ring-slate-200 focus:outline-none"
               placeholder="••••••••"
             />
           </div>
           <div className="space-y-1">
-            <label className="text-xs text-slate-500">كلمة المرور الجديدة</label>
+            <label className="text-xs text-slate-500">الجديدة</label>
             <input
               type="password"
               value={passwords.next}
               onChange={(e) =>
                 setPasswords((prev) => ({ ...prev, next: e.target.value }))
               }
-              className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none"
+              className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:border-slate-900 focus:ring-2 focus:ring-slate-200 focus:outline-none"
               placeholder="••••••••"
             />
           </div>
         </div>
+        <button
+          onClick={changePassword}
+          disabled={busy}
+          className="w-full sm:w-auto rounded-lg bg-gradient-to-r from-indigo-600 via-violet-600 to-purple-600 text-white px-4 py-2 text-sm font-semibold shadow-sm hover:opacity-95 transition disabled:opacity-60"
+        >
+          حفظ كلمة المرور
+        </button>
       </section>
 
-      <section className="rounded-2xl bg-white/80 backdrop-blur-sm border border-slate-200 p-5 shadow-md space-y-3">
-        <div className="flex items-center justify-between">
-          <h2 className="text-lg font-semibold text-slate-800">نوع اليوم</h2>
-          <div className="flex gap-2">
-            {(["ON_SITE", "REMOTE"] as const).map((type) => (
-              <button
-                key={type}
-                onClick={() => saveDayType(type)}
-                className={`rounded-full px-4 py-2 text-sm font-semibold border transition ${
-                  currentDayType === type
-                    ? "bg-blue-600 text-white border-blue-600"
-                    : "bg-white text-slate-700 border-slate-200 hover:bg-slate-50"
+      <section className={`${panelClass} p-5 space-y-4`}>
+        <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+          <div>
+            <h2 className="text-lg font-semibold text-slate-900">
+              التبديل التلقائي حسب الأيام
+            </h2>
+            <p className="text-xs text-slate-500">
+              اختر أيام كل نوع وسيتم تغيير نوع اليوم تلقائياً.
+            </p>
+          </div>
+          <div className="flex items-center gap-3">
+            <span className="text-sm text-slate-700">التبديل التلقائي</span>
+            <button
+              type="button"
+              onClick={() => setAutoDayTypeEnabled((prev) => !prev)}
+              className={`relative inline-flex h-8 w-16 items-center rounded-full border overflow-hidden transition ${
+                autoDayTypeEnabled
+                  ? "bg-emerald-500 border-emerald-500"
+                  : "bg-slate-200 border-slate-300"
+              }`}
+            >
+              <span
+                className={`absolute top-1 h-5 w-5 rounded-full bg-white shadow ring-1 ring-black/5 transition-all duration-200 ease-out ${
+                  autoDayTypeEnabled
+                    ? "left-auto right-1"
+                    : "left-1 right-auto"
                 }`}
-              >
-                {dayTypeLabel(type)}
-              </button>
-            ))}
+              />
+              <span className="sr-only">تفعيل التبديل التلقائي</span>
+            </button>
+            <button
+              onClick={saveAutoDayType}
+              disabled={busy}
+              className="rounded-lg bg-gradient-to-r from-indigo-600 via-violet-600 to-purple-600 text-white px-3 py-2 text-sm font-semibold shadow-sm hover:opacity-95 transition disabled:opacity-60 whitespace-nowrap shrink-0"
+            >
+              حفظ التبديل التلقائي
+            </button>
           </div>
         </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {(["ON_SITE", "REMOTE"] as const).map((type) => (
+            <div
+              key={type}
+              className="rounded-xl border border-slate-200 bg-white/80 p-4 space-y-3 shadow-inner"
+            >
+              <div className="flex items-center justify-between">
+                <p className="text-sm font-semibold text-slate-800">
+                  أيام {dayTypeLabel(type)}
+                </p>
+                <span className="text-[11px] text-slate-500">
+                  {autoDays[type].length} يوم/أيام
+                </span>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                {dayOptions.map((day) => {
+                  const active = autoDays[type].includes(day.value);
+                  return (
+                    <button
+                      type="button"
+                      key={`${type}-${day.value}`}
+                      onClick={() => toggleDaySelection(type, day.value)}
+                      disabled={!autoDayTypeEnabled}
+                      className={`rounded-full border px-3 py-1.5 text-sm transition ${
+                        active
+                          ? "bg-emerald-500 text-white border-emerald-500 shadow-sm hover:bg-emerald-600"
+                          : "bg-white text-slate-700 border-slate-200 hover:border-emerald-200 hover:text-emerald-700 disabled:border-slate-200 disabled:text-slate-400"
+                      }`}
+                    >
+                      {day.label}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          ))}
+        </div>
+        <p className="text-xs text-slate-500">
+          في حال التعارض بين النوعين لنفس اليوم سيُحتفظ بآخر اختيار يدوي.
+        </p>
       </section>
 
-      <section className="rounded-2xl bg-white border border-slate-200 p-5 shadow-sm space-y-4">
+      <section className={`${panelClass} p-5 space-y-4`}>
         <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-          <h2 className="text-lg font-semibold text-slate-800">
-            أوقات الحصص ({dayTypeLabel(editDayType)})
-          </h2>
+          <div>
+            <h2 className="text-lg font-semibold text-slate-900">
+              أوقات الحصص ({dayTypeLabel(editDayType)})
+            </h2>
+            <p className="text-xs text-slate-500">
+              عدّل الترتيب والأوقات ثم احفظ التغييرات
+            </p>
+          </div>
           <div className="flex flex-wrap items-center gap-2 w-full md:w-auto justify-start md:justify-end">
             <select
-              className="rounded-lg border border-slate-200 px-2.5 py-1.5 text-xs md:px-3 md:py-2 md:text-sm focus:border-blue-500 focus:outline-none"
+              className="rounded-lg border border-slate-200 px-2.5 py-1.5 text-xs md:px-3 md:py-2 md:text-sm focus:border-slate-900 focus:ring-2 focus:ring-slate-200 focus:outline-none"
               value={editDayType}
               onChange={(e) => setEditDayType(e.target.value as "ON_SITE" | "REMOTE")}
             >
@@ -469,7 +647,7 @@ export const AdminClient = ({
             <button
               onClick={savePeriods}
               disabled={busy}
-              className="rounded-lg bg-blue-600 text-white px-3 py-1.5 text-xs md:px-4 md:py-2 md:text-sm font-semibold hover:bg-blue-700 transition disabled:opacity-60"
+              className="rounded-lg bg-gradient-to-r from-indigo-600 via-violet-600 to-purple-600 text-white px-3 py-1.5 text-xs md:px-4 md:py-2 md:text-sm font-semibold shadow-sm hover:opacity-95 transition disabled:opacity-60"
             >
               حفظ الأوقات
             </button>
@@ -480,63 +658,71 @@ export const AdminClient = ({
           {editingPeriods.map((period) => (
             <div
               key={`${editDayType}-${period.order}`}
-              className="grid grid-cols-1 md:grid-cols-3 gap-3 items-center border-2 border-slate-300 rounded-xl p-3"
+              className="rounded-xl border border-slate-200 bg-white/70 p-3 md:p-4 shadow-inner space-y-3"
             >
-              <div className="space-y-1">
-                <div className="flex items-center justify-between gap-2">
-                  <label className="text-xs text-slate-500">مسمى الحصة</label>
-                  <button
-                    type="button"
-                    onClick={() => removePeriod(period.order)}
-                    className="text-xs text-red-600 hover:text-red-700"
-                  >
-                    حذف
-                  </button>
+              <div className="flex items-center justify-between gap-2">
+                <div className="flex items-center gap-2">
+                  <span className="text-xs font-semibold text-slate-500">
+                    الحصة {period.order}
+                  </span>
+                  <span className="text-[11px] text-slate-400">{dayTypeLabel(editDayType)}</span>
                 </div>
-                <input
-                  type="text"
-                  value={period.name || ""}
-                  onChange={(e) =>
-                    updatePeriodField(period.order, "name", e.target.value)
-                  }
-                  className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none"
-                  placeholder={`الحصة ${period.order}`}
-                />
+                <button
+                  type="button"
+                  onClick={() => removePeriod(period.order)}
+                  className="text-xs text-red-600 hover:text-red-700"
+                >
+                  حذف
+                </button>
               </div>
-              <div className="space-y-1">
-                <label className="text-xs text-slate-500">بداية الحصة</label>
-                <input
-                  type="time"
-                  value={period.startTime}
-                  onChange={(e) =>
-                    updateStartAndDuration(period.order, e.target.value)
-                  }
-                  className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none"
-                  placeholder="08:00"
-                />
-              </div>
-              <div className="space-y-1">
-                <label className="text-xs text-slate-500">مدة الحصة (دقيقة)</label>
-                <input
-                  type="number"
-                  min={1}
-                  value={getDuration(period)}
-                  onChange={(e) => updateDurationMinutes(period.order, Number(e.target.value || 0))}
-                  className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none"
-                  placeholder="45"
-                />
-              </div>
-              <div className="space-y-1">
-                <label className="text-xs text-slate-500">نهاية الحصة</label>
-                <input
-                  type="time"
-                  value={period.endTime}
-                  onChange={(e) =>
-                    updatePeriodField(period.order, "endTime", e.target.value)
-                  }
-                  className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none"
-                  placeholder="08:45"
-                />
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
+                <div className="space-y-1">
+                  <label className="text-xs text-slate-500">مسمى الحصة</label>
+                  <input
+                    type="text"
+                    value={period.name || ""}
+                    onChange={(e) =>
+                      updatePeriodField(period.order, "name", e.target.value)
+                    }
+                    className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:border-slate-900 focus:ring-2 focus:ring-slate-200 focus:outline-none"
+                    placeholder={`الحصة ${period.order}`}
+                  />
+                </div>
+                <div className="space-y-1">
+                  <label className="text-xs text-slate-500">بداية الحصة</label>
+                  <input
+                    type="time"
+                    value={period.startTime}
+                    onChange={(e) =>
+                      updateStartAndDuration(period.order, e.target.value)
+                    }
+                    className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:border-slate-900 focus:ring-2 focus:ring-slate-200 focus:outline-none"
+                    placeholder="08:00"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <label className="text-xs text-slate-500">مدة الحصة (دقيقة)</label>
+                  <input
+                    type="number"
+                    min={1}
+                    value={getDuration(period)}
+                    onChange={(e) => updateDurationMinutes(period.order, Number(e.target.value || 0))}
+                    className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:border-slate-900 focus:ring-2 focus:ring-slate-200 focus:outline-none"
+                    placeholder="45"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <label className="text-xs text-slate-500">نهاية الحصة</label>
+                  <input
+                    type="time"
+                    value={period.endTime}
+                    onChange={(e) =>
+                      updatePeriodField(period.order, "endTime", e.target.value)
+                    }
+                    className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:border-slate-900 focus:ring-2 focus:ring-slate-200 focus:outline-none"
+                    placeholder="08:45"
+                  />
+                </div>
               </div>
             </div>
           ))}

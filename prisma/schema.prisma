@@ -9,6 +9,9 @@ datasource db {
 model Settings {
   id                Int      @id @default(autoincrement())
   currentDayType    String
+  autoDayTypeEnabled Boolean  @default(false)
+  onSiteDays        String   @default("")
+  remoteDays        String   @default("")
   adminPasswordHash String
   schoolName        String
   managerName       String

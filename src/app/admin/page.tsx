@@ -2,12 +2,16 @@ import { cookies } from "next/headers";
 
 import { AdminClient } from "@/components/AdminClient";
 import { ADMIN_COOKIE_NAME, isAdminAuthenticated } from "@/lib/auth";
+import { applyAutoDayType, parseDaysField } from "@/lib/day-type";
 import { prisma } from "@/lib/prisma";
 
 export const dynamic = "force-dynamic";
 
 export default async function AdminPage() {
-  const settings = await prisma.settings.findFirst();
+  const settings = await applyAutoDayType(
+    await prisma.settings.findFirst(),
+    new Date(),
+  );
 
   if (!settings) {
     return (
@@ -35,16 +39,20 @@ export default async function AdminPage() {
   const session = cookieStore.get(ADMIN_COOKIE_NAME)?.value;
 
   const authed = isAdminAuthenticated(session, settings);
+  const adminSettings = {
+    schoolName: settings.schoolName,
+    managerName: settings.managerName,
+    currentDayType: settings.currentDayType,
+    autoDayTypeEnabled: settings.autoDayTypeEnabled,
+    onSiteDays: parseDaysField(settings.onSiteDays),
+    remoteDays: parseDaysField(settings.remoteDays),
+  } as const;
 
   return (
     <main className="mx-auto max-w-5xl px-4 py-8">
       <AdminClient
         authed={authed}
-        settings={{
-          schoolName: settings.schoolName,
-          managerName: settings.managerName,
-          currentDayType: settings.currentDayType,
-        }}
+        settings={adminSettings}
         onSitePeriods={onSitePeriods}
         remotePeriods={remotePeriods}
       />

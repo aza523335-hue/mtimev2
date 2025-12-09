@@ -1,12 +1,16 @@
 import { HomeClient } from "@/components/HomeClient";
 import { getDateInfo } from "@/lib/date-utils";
+import { applyAutoDayType } from "@/lib/day-type";
 import { prisma } from "@/lib/prisma";
 
 export const dynamic = "force-dynamic";
 
 export default async function Home() {
   const now = new Date();
-  const settings = await prisma.settings.findFirst();
+  const settings = await applyAutoDayType(
+    await prisma.settings.findFirst(),
+    now,
+  );
 
   if (!settings) {
     return (
@@ -28,7 +32,7 @@ export default async function Home() {
   const dates = getDateInfo(now);
 
   return (
-    <main className="mx-auto max-w-6xl px-4 py-8 space-y-6">
+    <main className="w-full max-w-full px-4 py-8 space-y-6 lg:px-10">
       <header className="flex items-center justify-between">
         <div>
           <p className="text-sm text-slate-500">جدول الحصص اليومية</p>

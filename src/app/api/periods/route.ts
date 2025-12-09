@@ -1,12 +1,16 @@
 import { NextResponse } from "next/server";
 
 import { getDateInfo } from "@/lib/date-utils";
+import { applyAutoDayType } from "@/lib/day-type";
 import { prisma } from "@/lib/prisma";
 
 export const dynamic = "force-dynamic";
 
 export async function GET() {
-  const settings = await prisma.settings.findFirst();
+  const settings = await applyAutoDayType(
+    await prisma.settings.findFirst(),
+    new Date(),
+  );
 
   if (!settings) {
     return NextResponse.json(
