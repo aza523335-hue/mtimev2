@@ -1,6 +1,7 @@
 FROM node:20-bookworm-slim AS base
 WORKDIR /app
 ENV PRISMA_CONFIG_PATH=/app/prisma.config.ts
+ENV DATABASE_URL=file:./prisma/dev.db
 
 FROM base AS deps
 RUN apt-get update \
@@ -20,6 +21,7 @@ COPY prisma.config.ts ./prisma.config.ts
 COPY src ./src
 COPY public ./public
 RUN npx prisma generate
+RUN npm run db:seed
 RUN npm run build
 RUN npm prune --omit=dev
 
