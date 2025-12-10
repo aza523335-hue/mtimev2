@@ -88,6 +88,7 @@ export const HomeClient = ({ initialData }: Props) => {
   const [now, setNow] = useState(() => new Date(initialData.nowIso));
   const [error, setError] = useState<string | null>(null);
   const [soundEnabled, setSoundEnabled] = useState(false);
+  const [soundUnlocked, setSoundUnlocked] = useState(false);
   const [soundHydrated, setSoundHydrated] = useState(false);
   const audioContextRef = useRef<AudioContext | null>(null);
   const lastPeriodRef = useRef<{ id: number | null; status: "idle" | "current" } | null>(null);
@@ -142,7 +143,7 @@ export const HomeClient = ({ initialData }: Props) => {
     setSoundHydrated(true);
   }, []);
 
-  const ensureAudioContext = () => {
+  const ensureAudioContext = (unlock = false) => {
     if (typeof window === "undefined") return null;
     const AudioCtor =
       window.AudioContext ||
@@ -152,7 +153,12 @@ export const HomeClient = ({ initialData }: Props) => {
     if (!AudioCtor) return null;
 
     if (!audioContextRef.current) {
+      if (!unlock && !soundUnlocked) return null;
       audioContextRef.current = new AudioCtor();
+    }
+
+    if (unlock && !soundUnlocked) {
+      setSoundUnlocked(true);
     }
 
     if (audioContextRef.current.state === "suspended") {
@@ -215,10 +221,6 @@ export const HomeClient = ({ initialData }: Props) => {
       "period-sound-enabled",
       soundEnabled ? "true" : "false",
     );
-
-    if (soundEnabled) {
-      ensureAudioContext();
-    }
   }, [soundEnabled, soundHydrated]);
 
   useEffect(() => {
@@ -410,7 +412,7 @@ export const HomeClient = ({ initialData }: Props) => {
                 type="button"
                 onClick={() => {
                   setSoundEnabled((prev) => !prev);
-                  ensureAudioContext();
+                  ensureAudioContext(true);
                 }}
                 className={`flex items-center gap-2 rounded-full border px-3 py-2 text-xs font-semibold transition shadow-sm ${soundEnabled ? "bg-emerald-50 border-emerald-200 text-emerald-800" : "bg-white border-slate-200 text-slate-600"}`}
                 aria-pressed={soundEnabled}
