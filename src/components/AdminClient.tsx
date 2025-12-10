@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { type FormEvent, useMemo, useState } from "react";
+import { type FormEvent, useEffect, useMemo, useRef, useState } from "react";
 
 import { dayTypeLabel } from "@/lib/date-utils";
 
@@ -122,6 +122,7 @@ export const AdminClient = ({
       );
       setMessage("تم إضافة ترم جديد، لا تنسَ الحفظ لتأكيد الإضافة.");
       setError(null);
+      setToastVisible(true);
       return [
         ...prev,
         {
@@ -149,6 +150,7 @@ export const AdminClient = ({
     setTerms((prev) => prev.filter((_, idx) => idx !== index));
     setMessage("تم حذف الترم، احفظ التغييرات لتأكيد الحذف.");
     setError(null);
+    setToastVisible(true);
   };
 
   const handleLogin = async (event: FormEvent<HTMLFormElement>) => {
@@ -380,6 +382,9 @@ export const AdminClient = ({
 
       return { ...prev, [editDayType]: normalizeOrders(updated) };
     });
+    setMessage("تم إضافة حصة جديدة، احفظ التغييرات للتأكيد.");
+    setError(null);
+    setToastVisible(true);
   };
 
   const removePeriod = (order: number) => {
@@ -387,6 +392,9 @@ export const AdminClient = ({
       const filtered = prev[editDayType].filter((p) => p.order !== order);
       return { ...prev, [editDayType]: normalizeOrders(filtered) };
     });
+    setMessage("تم حذف الحصة، احفظ التغييرات للتأكيد.");
+    setError(null);
+    setToastVisible(true);
   };
 
   const toggleDaySelection = (type: "ON_SITE" | "REMOTE", day: number) => {
@@ -441,6 +449,20 @@ export const AdminClient = ({
     "inline-block h-3 w-3 rounded-full bg-gradient-to-r from-indigo-500 via-violet-500 to-fuchsia-500 shadow-sm";
   const titleChip =
     "inline-flex items-center gap-2 rounded-full px-3 py-1 text-sm font-semibold text-white bg-gradient-to-r from-slate-900 via-indigo-700 to-violet-700 shadow-sm";
+  const [toastVisible, setToastVisible] = useState(false);
+  const toastTimerRef = useRef<NodeJS.Timeout | null>(null);
+
+  useEffect(() => {
+    if (!toastVisible) return;
+    if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
+    const timer = setTimeout(() => {
+      setToastVisible(false);
+    }, 2000);
+    toastTimerRef.current = timer;
+    return () => clearTimeout(timer);
+  }, [toastVisible]);
+
+  const showToast = Boolean(toastVisible && (message || error));
 
   if (!isAuthed) {
     return (
@@ -487,7 +509,7 @@ export const AdminClient = ({
 
   return (
     <div className="space-y-6">
-      {(message || error) && (
+      {showToast && (
         <div className="fixed inset-0 z-50 flex items-center justify-center px-4 pointer-events-none">
           <div
             className={`pointer-events-auto rounded-2xl border px-5 py-4 shadow-2xl backdrop-blur max-w-sm w-full text-center ${
@@ -589,6 +611,51 @@ export const AdminClient = ({
             />
           </div>
         </div>
+      </section>
+
+      <section className={`${panelClass} p-5 space-y-4`}>
+        <div className="flex flex-col gap-1">
+          <div className="flex items-center gap-2">
+            <span className={titleAccent} />
+            <h2 className="text-lg font-semibold text-slate-900">
+              <span className={titleChip}>تغيير كلمة المرور</span>
+            </h2>
+          </div>
+          <p className="text-xs text-slate-500">استخدم كلمة قوية سهلة التذكر</p>
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+          <div className="space-y-1">
+            <label className="text-xs text-slate-500">الحالية</label>
+            <input
+              type="password"
+              value={passwords.current}
+              onChange={(e) =>
+                setPasswords((prev) => ({ ...prev, current: e.target.value }))
+              }
+              className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:border-slate-900 focus:ring-2 focus:ring-slate-200 focus:outline-none"
+              placeholder="••••••••"
+            />
+          </div>
+          <div className="space-y-1">
+            <label className="text-xs text-slate-500">الجديدة</label>
+            <input
+              type="password"
+              value={passwords.next}
+              onChange={(e) =>
+                setPasswords((prev) => ({ ...prev, next: e.target.value }))
+              }
+              className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:border-slate-900 focus:ring-2 focus:ring-slate-200 focus:outline-none"
+              placeholder="••••••••"
+            />
+          </div>
+        </div>
+        <button
+          onClick={changePassword}
+          disabled={busy}
+          className="w-full sm:w-auto rounded-lg bg-gradient-to-r from-indigo-600 via-violet-600 to-purple-600 text-white px-4 py-2 text-sm font-semibold shadow-sm hover:opacity-95 transition disabled:opacity-60"
+        >
+          حفظ كلمة المرور
+        </button>
       </section>
 
       <section className={`${panelClass} p-5 space-y-4`}>
@@ -725,51 +792,6 @@ export const AdminClient = ({
             </button>
           ))}
         </div>
-      </section>
-
-      <section className={`${panelClass} p-5 space-y-4`}>
-        <div className="flex flex-col gap-1">
-          <div className="flex items-center gap-2">
-            <span className={titleAccent} />
-            <h2 className="text-lg font-semibold text-slate-900">
-              <span className={titleChip}>تغيير كلمة المرور</span>
-            </h2>
-          </div>
-          <p className="text-xs text-slate-500">استخدم كلمة قوية سهلة التذكر</p>
-        </div>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-          <div className="space-y-1">
-            <label className="text-xs text-slate-500">الحالية</label>
-            <input
-              type="password"
-              value={passwords.current}
-              onChange={(e) =>
-                setPasswords((prev) => ({ ...prev, current: e.target.value }))
-              }
-              className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:border-slate-900 focus:ring-2 focus:ring-slate-200 focus:outline-none"
-              placeholder="••••••••"
-            />
-          </div>
-          <div className="space-y-1">
-            <label className="text-xs text-slate-500">الجديدة</label>
-            <input
-              type="password"
-              value={passwords.next}
-              onChange={(e) =>
-                setPasswords((prev) => ({ ...prev, next: e.target.value }))
-              }
-              className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:border-slate-900 focus:ring-2 focus:ring-slate-200 focus:outline-none"
-              placeholder="••••••••"
-            />
-          </div>
-        </div>
-        <button
-          onClick={changePassword}
-          disabled={busy}
-          className="w-full sm:w-auto rounded-lg bg-gradient-to-r from-indigo-600 via-violet-600 to-purple-600 text-white px-4 py-2 text-sm font-semibold shadow-sm hover:opacity-95 transition disabled:opacity-60"
-        >
-          حفظ كلمة المرور
-        </button>
       </section>
 
       <section className={`${panelClass} p-5 space-y-4`}>
