@@ -38,6 +38,20 @@ async function main() {
   const password = process.env.DEFAULT_ADMIN_PASSWORD || "admin123";
   const adminPasswordHash = hashPassword(password);
 
+  const currentYear = new Date().getFullYear();
+  const defaultTerms = [
+    {
+      name: `الترم الأول ${currentYear}`,
+      startDate: new Date(`${currentYear}-08-18T00:00:00.000Z`),
+      endDate: new Date(`${currentYear}-11-30T23:59:59.000Z`),
+    },
+    {
+      name: `الترم الثاني ${currentYear}`,
+      startDate: new Date(`${currentYear}-12-15T00:00:00.000Z`),
+      endDate: new Date(`${currentYear + 1}-03-01T23:59:59.000Z`),
+    },
+  ];
+
   await prisma.settings.upsert({
     where: { id: 1 },
     update: {
@@ -75,6 +89,9 @@ async function main() {
       endTime: end,
     })),
   });
+
+  await prisma.term.deleteMany();
+  await prisma.term.createMany({ data: defaultTerms });
 
   console.log("Database seeded.");
   console.log(`Default admin password: ${password}`);

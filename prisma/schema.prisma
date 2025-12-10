@@ -28,3 +28,12 @@ model Period {
 
   @@unique([dayType, order])
 }
+
+model Term {
+  id        Int      @id @default(autoincrement())
+  name      String
+  startDate DateTime
+  endDate   DateTime
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}

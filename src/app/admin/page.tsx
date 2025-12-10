@@ -35,6 +35,8 @@ export default async function AdminPage() {
     orderBy: { order: "asc" },
   });
 
+  const terms = await prisma.term.findMany({ orderBy: { startDate: "asc" } });
+
   const cookieStore = await cookies();
   const session = cookieStore.get(ADMIN_COOKIE_NAME)?.value;
 
@@ -55,6 +57,12 @@ export default async function AdminPage() {
         settings={adminSettings}
         onSitePeriods={onSitePeriods}
         remotePeriods={remotePeriods}
+        terms={terms.map((term) => ({
+          id: term.id,
+          name: term.name,
+          startDate: term.startDate.toISOString().split("T")[0],
+          endDate: term.endDate.toISOString().split("T")[0],
+        }))}
       />
     </main>
   );

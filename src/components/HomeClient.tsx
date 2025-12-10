@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import { dayTypeLabel, parseTimeInTimeZone } from "@/lib/date-utils";
+import { type TermStatus } from "@/lib/terms";
 
 import { HeaderCard } from "./HeaderCard";
 import { PeriodCard } from "./PeriodCard";
@@ -28,6 +29,7 @@ type PeriodsPayload = {
   gregorianMonthNumber: number;
   hijriMonthNumber: number;
   nowIso: string;
+   termStatus?: TermStatus | null;
 };
 
 type Props = {
@@ -58,6 +60,27 @@ const normalizePeriods = (baseDate: Date, periods: Period[]) => {
 
     return { ...period, start, end };
   });
+};
+
+const formatShortDate = (value: string) =>
+  new Intl.DateTimeFormat("ar-EG", {
+    year: "numeric",
+    month: "long",
+    day: "2-digit",
+    timeZone: "Asia/Riyadh",
+  }).format(new Date(value));
+
+const describeTermStatus = (term: TermStatus) => {
+  if (term.status === "upcoming") {
+    const days = term.daysUntilStart ?? term.remainingDays;
+    return `يبدأ خلال ${Math.max(0, days)} يوم`;
+  }
+
+  if (term.status === "finished") {
+    return "انتهى هذا الترم";
+  }
+
+  return `المتبقي ${Math.max(0, term.remainingDays)} يوم`;
 };
 
 export const HomeClient = ({ initialData }: Props) => {
@@ -173,15 +196,17 @@ export const HomeClient = ({ initialData }: Props) => {
   };
 
   const playStartSound = () => {
-    // نغمة جهورية قصيرة لبداية الحصة
-    playTone(1100, 240, 0, 0.72, "square"); // نبضة قوية
-    playTone(820, 240, 0.18, 0.66, "triangle"); // متابعة جهورية قصيرة
+    // نغمة جرس تقليدية لبداية الحصة
+    playTone(1200, 620, 0, 0.78, "sine"); // ضربة الجرس
+    playTone(900, 680, 0.04, 0.68, "triangle"); // ارتداد خفيف
+    playTone(600, 540, 0.12, 0.5, "sine"); // ذيل الجرس
   };
 
   const playEndSound = () => {
-    // نغمة جهورية قصيرة لنهاية الحصة
-    playTone(880, 240, 0, 0.7, "square"); // نبضة ختامية واضحة
-    playTone(640, 240, 0.18, 0.64, "triangle"); // إنهاء مختصر
+    // نغمة نهاية مختلفة وواضحة (نزول حاد) عن بداية الحصة
+    playTone(520, 520, 0, 0.7, "square"); // نبضة منخفضة
+    playTone(400, 480, 0.1, 0.6, "triangle"); // نزول أوضح
+    playTone(300, 360, 0.18, 0.5, "sine"); // تذييل عميق
   };
 
   useEffect(() => {
@@ -320,7 +345,7 @@ export const HomeClient = ({ initialData }: Props) => {
 
   return (
     <div className="space-y-6">
-      <div className="grid gap-4">
+      <div className="space-y-4">
         <HeaderCard
           schoolName={data.header.schoolName}
           managerName={data.header.managerName}
@@ -329,67 +354,117 @@ export const HomeClient = ({ initialData }: Props) => {
           gregorianMonthNumber={data.gregorianMonthNumber}
           hijriMonthNumber={data.hijriMonthNumber}
         />
-        <div className="flex flex-col items-center gap-3 rounded-2xl bg-white/70 backdrop-blur-md border border-slate-200 p-4 shadow-sm md:grid md:grid-cols-4 md:items-center md:justify-items-center md:gap-4">
-          <div className="flex justify-center md:justify-start md:col-span-1">
-            <span className="px-5 py-2 rounded-xl bg-indigo-600 text-white text-sm md:text-base lg:text-lg font-bold md:font-extrabold shadow text-center">
-              {dayTypeLabel(data.dayType)}
-            </span>
-          </div>
-          <div className="text-sm md:text-lg text-slate-700 md:col-span-1 md:text-center">
-            الآن:{" "}
-            <span className="font-semibold md:font-bold md:text-xl text-slate-900">
-              {new Intl.DateTimeFormat("ar-EG", {
-                hour: "2-digit",
-                minute: "2-digit",
-                second: "2-digit",
-                timeZone: "Asia/Riyadh",
-              }).format(now)}
-            </span>
-          </div>
-          <div className="md:col-span-1 md:justify-self-center">
-            <button
-              type="button"
-              onClick={() => {
-                setSoundEnabled((prev) => !prev);
-                ensureAudioContext();
-              }}
-              className={`flex items-center gap-2 rounded-full border px-3 py-2 text-xs font-semibold transition shadow-sm ${soundEnabled ? "bg-emerald-50 border-emerald-200 text-emerald-800" : "bg-white border-slate-200 text-slate-600"}`}
-              aria-pressed={soundEnabled}
-            >
-              <span
-                className={`h-2.5 w-2.5 rounded-full ${soundEnabled ? "bg-emerald-500" : "bg-slate-300"}`}
-                aria-hidden
-              />
-              تنبيه صوتي للحصص
-              <span className="text-[11px] font-normal">
-                {soundEnabled ? "مُفعّل" : "متوقف"}
-              </span>
-            </button>
-          </div>
-          {dayBounds && (
-            <div className="w-full md:col-span-1 md:justify-self-center md:max-w-xs space-y-1">
-              <div className="flex items-center justify-between text-xs md:text-sm font-semibold md:font-bold text-slate-700">
+        <div className="flex flex-col gap-2 rounded-2xl bg-white/70 backdrop-blur-md border border-slate-200 p-3 sm:p-4 shadow-sm">
+          {data.termStatus ? (
+            <div className="rounded-xl border border-slate-200 bg-white/70 p-2 sm:p-2.5 flex flex-col gap-1">
+              <div className="flex items-start justify-between gap-2">
+                <h3 className="text-sm font-bold text-slate-900">
+                  {data.termStatus.name}
+                </h3>
                 <span
-                  className={`text-[11px] md:text-xs ${dayBounds.ended ? "text-red-600" : "text-slate-500"}`}
+                  className={`rounded-full px-2.5 py-1 text-[11px] font-semibold whitespace-nowrap ${
+                    data.termStatus.status === "active"
+                      ? "bg-emerald-50 text-emerald-700 border border-emerald-200"
+                      : data.termStatus.status === "upcoming"
+                        ? "bg-amber-50 text-amber-700 border border-amber-200"
+                        : "bg-slate-100 text-slate-600 border border-slate-200"
+                  }`}
                 >
-                  {dayBounds.ended ? "انتهى اليوم الدراسي" : "اليوم الدراسي"}
-                </span>
-                <span className="md:text-base">
-                  المتبقي: {Math.max(0, Math.round(dayBounds.remainingPercent))}%
+                  {describeTermStatus(data.termStatus)}
                 </span>
               </div>
-              <div className="relative h-2 md:h-2.5 w-full overflow-hidden rounded-full bg-slate-200/80 shadow-inner border border-white/80">
-                <div
-                  className="h-full transition-[width] duration-700 ease-out"
-                  style={{
-                    width: `${dayBounds.remainingPercent}%`,
-                    background: "linear-gradient(90deg, #10b981 0%, #f59e0b 50%, #ef4444 100%)",
-                  }}
-                  aria-label="شريط تقدم اليوم الدراسي"
-                />
+              <div className="space-y-1">
+                <div className="flex items-center justify-between text-[11px] font-semibold text-slate-600">
+                  <span className="truncate">
+                    متبقي: {Math.max(0, data.termStatus.remainingDays)} من{" "}
+                    {Math.max(1, data.termStatus.totalDays)} يوم
+                  </span>
+                  <span className="text-slate-800 whitespace-nowrap">
+                    {Math.max(0, Math.round(data.termStatus.remainingPercent))}%
+                  </span>
+                </div>
+                <div className="relative h-2 w-full overflow-hidden rounded-full bg-slate-100 border border-slate-200">
+                  <div
+                    className="h-full transition-[width] duration-700 ease-out"
+                    style={{
+                      width: `${Math.max(
+                        0,
+                        Math.min(100, Math.round(data.termStatus.remainingPercent)),
+                      )}%`,
+                      background:
+                        "linear-gradient(90deg, #22c55e 0%, #f97316 50%, #ef4444 100%)",
+                    }}
+                    aria-label="شريط تقدم الترم الدراسي"
+                  />
+                </div>
               </div>
             </div>
-          )}
+          ) : null}
+
+          <div className="rounded-xl bg-indigo-50/70 border border-indigo-100 p-3 sm:p-4 space-y-2 sm:space-y-3">
+            <div className="flex flex-wrap items-center justify-between gap-2 sm:gap-3">
+              <span className="px-4 py-2 rounded-xl bg-indigo-600 text-white text-sm lg:text-base font-bold shadow">
+                {dayTypeLabel(data.dayType)}
+              </span>
+              <button
+                type="button"
+                onClick={() => {
+                  setSoundEnabled((prev) => !prev);
+                  ensureAudioContext();
+                }}
+                className={`flex items-center gap-2 rounded-full border px-3 py-2 text-xs font-semibold transition shadow-sm ${soundEnabled ? "bg-emerald-50 border-emerald-200 text-emerald-800" : "bg-white border-slate-200 text-slate-600"}`}
+                aria-pressed={soundEnabled}
+              >
+                <span
+                  className={`h-2.5 w-2.5 rounded-full ${soundEnabled ? "bg-emerald-500" : "bg-slate-300"}`}
+                  aria-hidden
+                />
+                تنبيه صوتي للحصص
+                <span className="text-[11px] font-normal">
+                  {soundEnabled ? "مُفعّل" : "متوقف"}
+                </span>
+              </button>
+            </div>
+
+            {dayBounds && (
+              <div className="w-full space-y-1">
+                <div className="grid grid-cols-[auto_1fr_auto] sm:grid-cols-3 justify-items-start sm:justify-items-stretch items-center gap-2 text-[11px] sm:text-xs lg:text-sm font-semibold text-slate-700">
+                  <span
+                    className={`text-[11px] lg:text-xs whitespace-nowrap ${dayBounds.ended ? "text-red-600" : "text-slate-500"}`}
+                  >
+                    {dayBounds.ended ? "انتهى اليوم الدراسي" : "اليوم الدراسي"}
+                  </span>
+                  <div className="text-center text-slate-800 whitespace-nowrap">
+                    <span className="text-[10px] sm:text-xs text-slate-500 mr-1">
+                      الآن
+                    </span>
+                    <span className="font-bold text-base sm:text-lg lg:text-xl text-slate-900">
+                      {new Intl.DateTimeFormat("ar-EG", {
+                        hour: "2-digit",
+                        minute: "2-digit",
+                        second: "2-digit",
+                        hour12: true,
+                        timeZone: "Asia/Riyadh",
+                      }).format(now)}
+                    </span>
+                  </div>
+                  <span className="lg:text-base justify-self-start text-left sm:text-right sm:justify-self-end whitespace-nowrap text-slate-800 pl-1">
+                    المتبقي: {Math.max(0, Math.round(dayBounds.remainingPercent))}%
+                  </span>
+                </div>
+                <div className="relative h-2 lg:h-2.5 w-full overflow-hidden rounded-full bg-slate-200/80 shadow-inner border border-white/80">
+                  <div
+                    className="h-full transition-[width] duration-700 ease-out"
+                    style={{
+                      width: `${dayBounds.remainingPercent}%`,
+                      background: "linear-gradient(90deg, #10b981 0%, #f59e0b 50%, #ef4444 100%)",
+                    }}
+                    aria-label="شريط تقدم اليوم الدراسي"
+                  />
+                </div>
+              </div>
+            )}
+          </div>
         </div>
       </div>
 

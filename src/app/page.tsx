@@ -2,6 +2,7 @@ import { HomeClient } from "@/components/HomeClient";
 import { getDateInfo } from "@/lib/date-utils";
 import { applyAutoDayType } from "@/lib/day-type";
 import { prisma } from "@/lib/prisma";
+import { computeTermStatus } from "@/lib/terms";
 
 export const dynamic = "force-dynamic";
 
@@ -28,6 +29,9 @@ export default async function Home() {
     where: { dayType: settings.currentDayType },
     orderBy: { order: "asc" },
   });
+
+  const terms = await prisma.term.findMany({ orderBy: { startDate: "asc" } });
+  const termStatus = computeTermStatus(terms, now);
 
   const dates = getDateInfo(now);
 
@@ -63,6 +67,7 @@ export default async function Home() {
           gregorianMonthNumber: dates.gregorianMonthNumber,
           hijriMonthNumber: dates.hijriMonthNumber,
           nowIso: now.toISOString(),
+          termStatus,
         }}
       />
     </main>

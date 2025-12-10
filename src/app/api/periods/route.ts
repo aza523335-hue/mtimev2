@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { getDateInfo } from "@/lib/date-utils";
 import { applyAutoDayType } from "@/lib/day-type";
 import { prisma } from "@/lib/prisma";
+import { computeTermStatus } from "@/lib/terms";
 
 export const dynamic = "force-dynamic";
 
@@ -24,6 +25,9 @@ export async function GET() {
     orderBy: { order: "asc" },
   });
 
+  const terms = await prisma.term.findMany({ orderBy: { startDate: "asc" } });
+  const termStatus = computeTermStatus(terms, new Date());
+
   const { gregorianDate, hijriDate, gregorianMonthNumber, hijriMonthNumber } =
     getDateInfo();
 
@@ -39,5 +43,7 @@ export async function GET() {
     hijriDate,
     gregorianMonthNumber,
     hijriMonthNumber,
+    nowIso: new Date().toISOString(),
+    termStatus,
   });
 }

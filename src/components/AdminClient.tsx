@@ -14,6 +14,13 @@ type Period = {
   endTime: string;
 };
 
+type TermItem = {
+  id?: number;
+  name: string;
+  startDate: string;
+  endDate: string;
+};
+
 type SettingsShape = {
   schoolName: string;
   managerName: string;
@@ -28,6 +35,7 @@ type Props = {
   settings: SettingsShape;
   onSitePeriods: Period[];
   remotePeriods: Period[];
+  terms: TermItem[];
 };
 
 export const AdminClient = ({
@@ -35,6 +43,7 @@ export const AdminClient = ({
   settings,
   onSitePeriods,
   remotePeriods,
+  terms: initialTerms,
 }: Props) => {
   const [isAuthed, setIsAuthed] = useState(authed);
   const [password, setPassword] = useState("");
@@ -61,11 +70,14 @@ export const AdminClient = ({
     ON_SITE: onSitePeriods,
     REMOTE: remotePeriods,
   });
+  const [terms, setTerms] = useState<TermItem[]>(initialTerms);
   const [passwords, setPasswords] = useState({
     current: "",
     next: "",
   });
   const [loggingOut, setLoggingOut] = useState(false);
+
+  const toDateInput = (value: Date) => value.toISOString().split("T")[0];
 
   const broadcastUpdate = () => {
     if (typeof window === "undefined" || typeof BroadcastChannel === "undefined") {
@@ -93,6 +105,51 @@ export const AdminClient = ({
     { value: 5, label: "الجمعة" },
     { value: 6, label: "السبت" },
   ];
+
+  const addTerm = () => {
+    setTerms((prev) => {
+      const lastEndRaw = prev[prev.length - 1]?.endDate;
+      const lastEndDate = lastEndRaw ? new Date(lastEndRaw) : null;
+      const safeLastEnd =
+        lastEndDate && !Number.isNaN(lastEndDate.getTime())
+          ? lastEndDate
+          : null;
+      const start = safeLastEnd ? toDateInput(safeLastEnd) : toDateInput(new Date());
+      const end = toDateInput(
+        new Date(
+          (safeLastEnd ?? new Date()).getTime() + 90 * 24 * 60 * 60 * 1000,
+        ),
+      );
+      setMessage("تم إضافة ترم جديد، لا تنسَ الحفظ لتأكيد الإضافة.");
+      setError(null);
+      return [
+        ...prev,
+        {
+          name: `ترم ${prev.length + 1}`,
+          startDate: start,
+          endDate: end,
+        },
+      ];
+    });
+  };
+
+  const updateTermField = (
+    index: number,
+    field: keyof TermItem,
+    value: string,
+  ) => {
+    setTerms((prev) =>
+      prev.map((term, idx) =>
+        idx === index ? { ...term, [field]: value } : term,
+      ),
+    );
+  };
+
+  const removeTerm = (index: number) => {
+    setTerms((prev) => prev.filter((_, idx) => idx !== index));
+    setMessage("تم حذف الترم، احفظ التغييرات لتأكيد الحذف.");
+    setError(null);
+  };
 
   const handleLogin = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -216,6 +273,30 @@ export const AdminClient = ({
     } else {
       const payload = await res.json().catch(() => ({}));
       setError(payload?.error || "تعذر حفظ الحصص");
+    }
+  };
+
+  const saveTerms = async () => {
+    setBusy(true);
+    setMessage(null);
+    setError(null);
+
+    const res = await fetch("/api/admin/terms", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ terms }),
+    });
+
+    setBusy(false);
+
+    if (res.ok) {
+      const payload = await res.json().catch(() => ({}));
+      setTerms(Array.isArray(payload?.terms) ? payload.terms : terms);
+      setMessage("تم حفظ أترام السنة الدراسية");
+      broadcastUpdate();
+    } else {
+      const payload = await res.json().catch(() => ({}));
+      setError(payload?.error || "تعذر حفظ الأترام");
     }
   };
 
@@ -356,6 +437,10 @@ export const AdminClient = ({
 
   const panelClass =
     "rounded-2xl border border-slate-200 bg-white/80 backdrop-blur shadow-sm";
+  const titleAccent =
+    "inline-block h-3 w-3 rounded-full bg-gradient-to-r from-indigo-500 via-violet-500 to-fuchsia-500 shadow-sm";
+  const titleChip =
+    "inline-flex items-center gap-2 rounded-full px-3 py-1 text-sm font-semibold text-white bg-gradient-to-r from-slate-900 via-indigo-700 to-violet-700 shadow-sm";
 
   if (!isAuthed) {
     return (
@@ -402,6 +487,21 @@ export const AdminClient = ({
 
   return (
     <div className="space-y-6">
+      {(message || error) && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center px-4 pointer-events-none">
+          <div
+            className={`pointer-events-auto rounded-2xl border px-5 py-4 shadow-2xl backdrop-blur max-w-sm w-full text-center ${
+              error
+                ? "bg-white/95 border-red-200 text-red-700"
+                : "bg-white/95 border-emerald-200 text-emerald-700"
+            }`}
+          >
+            <p className="text-sm font-semibold leading-relaxed">
+              {error || message}
+            </p>
+          </div>
+        </div>
+      )}
       <div className="relative overflow-hidden rounded-3xl border border-slate-200 bg-gradient-to-l from-indigo-700 via-violet-700 to-purple-700 text-white p-6 sm:p-8 shadow-xl">
         <div className="absolute inset-0 opacity-30 bg-[radial-gradient(circle_at_10%_10%,rgba(255,255,255,0.3),transparent_35%),radial-gradient(circle_at_80%_0%,rgba(255,255,255,0.2),transparent_45%)]" />
         <div className="relative flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
@@ -449,7 +549,12 @@ export const AdminClient = ({
       <section className={`${panelClass} p-5 space-y-4`}>
         <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
           <div>
-            <h2 className="text-lg font-semibold text-slate-900">بيانات المدرسة</h2>
+            <div className="flex items-center gap-2">
+              <span className={titleAccent} />
+              <h2 className="text-lg font-semibold text-slate-900">
+                <span className={titleChip}>بيانات المدرسة</span>
+              </h2>
+            </div>
             <p className="text-xs text-slate-500">تظهر في رأس الصفحة الرئيسية</p>
           </div>
           <button
@@ -489,7 +594,118 @@ export const AdminClient = ({
       <section className={`${panelClass} p-5 space-y-4`}>
         <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
           <div>
-            <h2 className="text-lg font-semibold text-slate-900">نوع اليوم</h2>
+            <div className="flex items-center gap-2">
+              <span className={titleAccent} />
+              <h2 className="text-lg font-semibold text-slate-900">
+                <span className={titleChip}>أترام السنة الدراسية</span>
+              </h2>
+            </div>
+            <p className="text-xs text-slate-500">
+              حدد اسم كل ترم مع تاريخ البداية والنهاية ليظهر المتبقي في الصفحة الرئيسية.
+            </p>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <button
+              type="button"
+              onClick={addTerm}
+              className="rounded-lg border border-dashed border-slate-300 text-slate-700 px-3 py-1.5 text-xs sm:text-sm font-semibold hover:border-slate-400 hover:bg-slate-50 transition"
+            >
+              + إضافة ترم
+            </button>
+            <button
+              onClick={saveTerms}
+              disabled={busy}
+              className="rounded-lg bg-gradient-to-r from-indigo-600 via-violet-600 to-purple-600 text-white px-3 py-1.5 text-xs sm:text-sm font-semibold shadow-sm hover:opacity-95 transition disabled:opacity-60"
+            >
+              حفظ الأترام
+            </button>
+          </div>
+        </div>
+
+        <div className="space-y-3">
+          {terms.map((term, index) => {
+            const darkRow = index % 2 === 0;
+            return (
+              <div
+                key={`${term.id ?? "new"}-${index}`}
+                className={`rounded-xl border p-4 shadow-sm space-y-3 ${
+                  darkRow ? "bg-slate-50 border-slate-200" : "bg-white/80 border-slate-200"
+                }`}
+              >
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <p className="text-sm font-semibold text-slate-800">
+                      الترم {index + 1}
+                    </p>
+                    <p className="text-[11px] text-slate-500">
+                      {term.name || "لم يحدد الاسم بعد"}
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => removeTerm(index)}
+                    className="text-xs text-red-600 hover:text-red-700"
+                  >
+                    حذف
+                  </button>
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                  <div className="space-y-1">
+                    <label className="text-xs text-slate-500">اسم الترم</label>
+                    <input
+                      type="text"
+                      value={term.name}
+                      onChange={(e) =>
+                        updateTermField(index, "name", e.target.value)
+                      }
+                      className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:border-slate-900 focus:ring-2 focus:ring-slate-200 focus:outline-none"
+                      placeholder="مثال: الترم الأول"
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-xs text-slate-500">بداية الترم</label>
+                    <input
+                      type="date"
+                      value={term.startDate}
+                      onChange={(e) =>
+                        updateTermField(index, "startDate", e.target.value)
+                      }
+                      className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:border-slate-900 focus:ring-2 focus:ring-slate-200 focus:outline-none"
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-xs text-slate-500">نهاية الترم</label>
+                    <input
+                      type="date"
+                      value={term.endDate}
+                      onChange={(e) =>
+                        updateTermField(index, "endDate", e.target.value)
+                      }
+                      className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:border-slate-900 focus:ring-2 focus:ring-slate-200 focus:outline-none"
+                    />
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+
+          {!terms.length && (
+            <div className="text-center text-sm text-slate-500 border border-dashed border-slate-200 rounded-xl py-6">
+              لم تتم إضافة أترام بعد.
+            </div>
+          )}
+        </div>
+      </section>
+
+      <section className={`${panelClass} p-5 space-y-4`}>
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <div className="flex items-center gap-2">
+              <span className={titleAccent} />
+              <h2 className="text-lg font-semibold text-slate-900">
+                <span className={titleChip}>نوع اليوم</span>
+              </h2>
+            </div>
             <p className="text-xs text-slate-500">تحويل فوري بين حضوري وعن بعد</p>
           </div>
           <span className="text-xs text-slate-500">الوضع الحالي: {dayTypeLabel(currentDayType)}</span>
@@ -513,7 +729,12 @@ export const AdminClient = ({
 
       <section className={`${panelClass} p-5 space-y-4`}>
         <div className="flex flex-col gap-1">
-          <h2 className="text-lg font-semibold text-slate-900">تغيير كلمة المرور</h2>
+          <div className="flex items-center gap-2">
+            <span className={titleAccent} />
+            <h2 className="text-lg font-semibold text-slate-900">
+              <span className={titleChip}>تغيير كلمة المرور</span>
+            </h2>
+          </div>
           <p className="text-xs text-slate-500">استخدم كلمة قوية سهلة التذكر</p>
         </div>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
@@ -554,9 +775,12 @@ export const AdminClient = ({
       <section className={`${panelClass} p-5 space-y-4`}>
         <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
           <div>
-            <h2 className="text-lg font-semibold text-slate-900">
-              التبديل التلقائي حسب الأيام
-            </h2>
+            <div className="flex items-center gap-2">
+              <span className={titleAccent} />
+              <h2 className="text-lg font-semibold text-slate-900">
+                <span className={titleChip}>التبديل التلقائي حسب الأيام</span>
+              </h2>
+            </div>
             <p className="text-xs text-slate-500">
               اختر أيام كل نوع وسيتم تغيير نوع اليوم تلقائياً.
             </p>
@@ -636,9 +860,12 @@ export const AdminClient = ({
       <section className={`${panelClass} p-5 space-y-4`}>
         <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
           <div>
-            <h2 className="text-lg font-semibold text-slate-900">
-              أوقات الحصص ({dayTypeLabel(editDayType)})
-            </h2>
+            <div className="flex items-center gap-2">
+              <span className={titleAccent} />
+              <h2 className="text-lg font-semibold text-slate-900">
+                <span className={titleChip}>أوقات الحصص ({dayTypeLabel(editDayType)})</span>
+              </h2>
+            </div>
             <p className="text-xs text-slate-500">
               عدّل الترتيب والأوقات ثم احفظ التغييرات
             </p>
@@ -670,10 +897,14 @@ export const AdminClient = ({
         </div>
 
         <div className="space-y-3">
-          {editingPeriods.map((period) => (
+          {editingPeriods.map((period, index) => {
+            const darkRow = index % 2 === 0;
+            return (
             <div
               key={`${editDayType}-${period.order}`}
-              className="rounded-xl border border-slate-200 bg-white/70 p-3 md:p-4 shadow-inner space-y-3"
+              className={`rounded-xl border-2 border-slate-300 p-3 md:p-4 shadow-md space-y-3 ${
+                darkRow ? "bg-slate-100" : "bg-white/70"
+              }`}
             >
               <div className="flex items-center justify-between gap-2">
                 <div className="flex items-center gap-2">
@@ -740,7 +971,8 @@ export const AdminClient = ({
                 </div>
               </div>
             </div>
-          ))}
+            );
+          })}
         </div>
       </section>
     </div>

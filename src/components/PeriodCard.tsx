@@ -26,6 +26,22 @@ const formatCountdown = (ms: number) => {
 const parseTime = (time: string, base: Date) =>
   parseTimeInTimeZone(time, base);
 
+const formatTime12 = (date: Date) => {
+  const parts = new Intl.DateTimeFormat("en-US", {
+    hour: "numeric",
+    minute: "2-digit",
+    hour12: true,
+    timeZone: "Asia/Riyadh",
+  }).formatToParts(date);
+
+  const hour = parts.find((p) => p.type === "hour")?.value ?? "";
+  const minute = parts.find((p) => p.type === "minute")?.value ?? "";
+  const periodRaw = parts.find((p) => p.type === "dayPeriod")?.value ?? "";
+  const period = periodRaw.toLowerCase() === "am" ? "ص" : "م";
+
+  return `${hour.padStart(2, "0")}:${minute} ${period}`.trim();
+};
+
 type Props = {
   period: Period;
   now: Date;
@@ -66,6 +82,9 @@ export const PeriodCard = ({ period, now }: Props) => {
         ? "bg-blue-200 border-2 border-blue-400 text-blue-900"
         : "bg-slate-200 border-2 border-slate-400 text-slate-800";
 
+  const displayStart = formatTime12(start);
+  const displayEnd = formatTime12(end);
+
   return (
     <div
       className={`relative overflow-hidden rounded-2xl border p-4 md:p-5 space-y-3 transition transform hover:-translate-y-1 hover:shadow-2xl ${accent}`}
@@ -86,8 +105,8 @@ export const PeriodCard = ({ period, now }: Props) => {
       </div>
 
       <div className="flex items-center justify-between text-slate-600 text-sm md:text-lg font-normal md:font-semibold">
-        <span>البداية: {period.startTime}</span>
-        <span>النهاية: {period.endTime}</span>
+        <span>البداية: {displayStart}</span>
+        <span>النهاية: {displayEnd}</span>
       </div>
 
       {isCurrent && (
