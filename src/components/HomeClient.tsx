@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 import { dayTypeLabel, parseTimeInTimeZone } from "@/lib/date-utils";
 
@@ -69,29 +69,48 @@ export const HomeClient = ({ initialData }: Props) => {
   const audioContextRef = useRef<AudioContext | null>(null);
   const lastPeriodRef = useRef<{ id: number | null; status: "idle" | "current" } | null>(null);
 
+  const fetchLatest = useCallback(async () => {
+    try {
+      const res = await fetch("/api/periods", { cache: "no-store" });
+      if (res.ok) {
+        const payload = (await res.json()) as PeriodsPayload;
+        setData(payload);
+        setError(null);
+      } else {
+        setError("تعذر تحديث البيانات مؤقتاً");
+      }
+    } catch {
+      setError("تعذر تحديث البيانات مؤقتاً");
+    }
+  }, []);
+
   useEffect(() => {
     const tick = setInterval(() => setNow(new Date()), 1000);
     return () => clearInterval(tick);
   }, []);
 
   useEffect(() => {
-    const interval = setInterval(async () => {
-      try {
-        const res = await fetch("/api/periods", { cache: "no-store" });
-        if (res.ok) {
-          const payload = (await res.json()) as PeriodsPayload;
-          setData(payload);
-          setError(null);
-        } else {
-          setError("تعذر تحديث البيانات مؤقتاً");
-        }
-      } catch {
-        setError("تعذر تحديث البيانات مؤقتاً");
-      }
-    }, 12000);
+    fetchLatest();
+    const interval = setInterval(fetchLatest, 12000);
 
     return () => clearInterval(interval);
-  }, []);
+  }, [fetchLatest]);
+
+  useEffect(() => {
+    if (typeof window === "undefined" || typeof BroadcastChannel === "undefined") return;
+    const channel = new BroadcastChannel("mtime-updates");
+    const handleMessage = (event: MessageEvent) => {
+      if (event?.data?.type === "settings-updated") {
+        fetchLatest();
+      }
+    };
+    channel.addEventListener("message", handleMessage);
+
+    return () => {
+      channel.removeEventListener("message", handleMessage);
+      channel.close();
+    };
+  }, [fetchLatest]);
 
   useEffect(() => {
     if (typeof window === "undefined") return;

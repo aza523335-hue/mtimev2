@@ -67,6 +67,19 @@ export const AdminClient = ({
   });
   const [loggingOut, setLoggingOut] = useState(false);
 
+  const broadcastUpdate = () => {
+    if (typeof window === "undefined" || typeof BroadcastChannel === "undefined") {
+      return;
+    }
+    try {
+      const channel = new BroadcastChannel("mtime-updates");
+      channel.postMessage({ type: "settings-updated" });
+      channel.close();
+    } catch {
+      // Ignore broadcast failures on unsupported browsers.
+    }
+  };
+
   const editingPeriods = useMemo(() => {
     return [...periods[editDayType]].sort((a, b) => a.order - b.order);
   }, [editDayType, periods]);
@@ -139,6 +152,7 @@ export const AdminClient = ({
 
     if (res.ok) {
       setMessage("تم تحديث نوع اليوم");
+      broadcastUpdate();
     } else {
       setError("تعذر تغيير نوع اليوم");
     }
@@ -169,6 +183,7 @@ export const AdminClient = ({
         currentDayType;
       setCurrentDayType(appliedType);
       setMessage("تم حفظ التبديل التلقائي");
+      broadcastUpdate();
     } else {
       const payload = await res.json().catch(() => ({}));
       setError(payload?.error || "تعذر حفظ التبديل التلقائي");
