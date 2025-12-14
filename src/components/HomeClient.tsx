@@ -62,14 +62,6 @@ const normalizePeriods = (baseDate: Date, periods: Period[]) => {
   });
 };
 
-const formatShortDate = (value: string) =>
-  new Intl.DateTimeFormat("ar-EG", {
-    year: "numeric",
-    month: "long",
-    day: "2-digit",
-    timeZone: "Asia/Riyadh",
-  }).format(new Date(value));
-
 const describeTermStatus = (term: TermStatus) => {
   if (term.status === "upcoming") {
     const days = term.daysUntilStart ?? term.remainingDays;
@@ -114,6 +106,7 @@ export const HomeClient = ({ initialData }: Props) => {
   }, []);
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     fetchLatest();
     const interval = setInterval(fetchLatest, 12000);
 
@@ -136,14 +129,27 @@ export const HomeClient = ({ initialData }: Props) => {
     };
   }, [fetchLatest]);
 
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-    const saved = window.localStorage.getItem("period-sound-enabled");
-    setSoundEnabled(saved === "true");
-    setSoundHydrated(true);
-  }, []);
+  const ensureAudioContext = useCallback(() => {
+    if (typeof window === "undefined" || !soundUnlocked) return null;
+    const AudioCtor =
+      window.AudioContext ||
+      (window as typeof window & { webkitAudioContext?: typeof AudioContext })
+        .webkitAudioContext;
 
-  const ensureAudioContext = (unlock = false) => {
+    if (!AudioCtor) return null;
+
+    if (!audioContextRef.current) {
+      audioContextRef.current = new AudioCtor();
+    }
+
+    if (audioContextRef.current.state === "suspended") {
+      audioContextRef.current.resume().catch(() => undefined);
+    }
+
+    return audioContextRef.current;
+  }, [soundUnlocked]);
+
+  const unlockAudioContext = useCallback(() => {
     if (typeof window === "undefined") return null;
     const AudioCtor =
       window.AudioContext ||
@@ -153,67 +159,77 @@ export const HomeClient = ({ initialData }: Props) => {
     if (!AudioCtor) return null;
 
     if (!audioContextRef.current) {
-      if (!unlock && !soundUnlocked) return null;
       audioContextRef.current = new AudioCtor();
-    }
-
-    if (unlock && !soundUnlocked) {
-      setSoundUnlocked(true);
     }
 
     if (audioContextRef.current.state === "suspended") {
       audioContextRef.current.resume().catch(() => undefined);
     }
 
+    if (!soundUnlocked) {
+      setSoundUnlocked(true);
+    }
+
     return audioContextRef.current;
-  };
+  }, [soundUnlocked]);
 
-  const playTone = (
-    frequency: number,
-    durationMs: number,
-    offsetSeconds = 0,
-    volume = 0.4,
-    type: OscillatorType = "sine",
-  ) => {
-    const ctx = ensureAudioContext();
-    if (!ctx) return;
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const saved = window.localStorage.getItem("period-sound-enabled");
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setSoundEnabled(saved === "true");
+    setSoundHydrated(true);
+  }, []);
 
-    const oscillator = ctx.createOscillator();
-    const gainNode = ctx.createGain();
+  const playTone = useCallback(
+    (
+      frequency: number,
+      durationMs: number,
+      offsetSeconds = 0,
+      volume = 0.4,
+      type: OscillatorType = "sine",
+    ) => {
+      const ctx = ensureAudioContext();
+      if (!ctx) return;
 
-    oscillator.type = type;
-    oscillator.frequency.setValueAtTime(
-      frequency,
-      ctx.currentTime + offsetSeconds,
-    );
+      const oscillator = ctx.createOscillator();
+      const gainNode = ctx.createGain();
 
-    const startAt = ctx.currentTime + offsetSeconds;
-    const endAt = startAt + durationMs / 1000;
+      oscillator.type = type;
+      oscillator.frequency.setValueAtTime(
+        frequency,
+        ctx.currentTime + offsetSeconds,
+      );
 
-    const level = Math.min(Math.max(volume, 0.01), 0.8);
-    gainNode.gain.setValueAtTime(level, startAt);
-    gainNode.gain.exponentialRampToValueAtTime(0.0001, endAt);
+      const startAt = ctx.currentTime + offsetSeconds;
+      const endAt = startAt + durationMs / 1000;
 
-    oscillator.connect(gainNode);
-    gainNode.connect(ctx.destination);
+      const level = Math.min(Math.max(volume, 0.01), 0.8);
+      gainNode.gain.setValueAtTime(level, startAt);
+      gainNode.gain.exponentialRampToValueAtTime(0.0001, endAt);
 
-    oscillator.start(startAt);
-    oscillator.stop(endAt);
-  };
+      oscillator.connect(gainNode);
+      gainNode.connect(ctx.destination);
 
-  const playStartSound = () => {
+      oscillator.start(startAt);
+      oscillator.stop(endAt);
+    },
+    [ensureAudioContext],
+  );
+
+  const playStartSound = useCallback(() => {
     // نغمة جرس تقليدية لبداية الحصة
     playTone(1200, 620, 0, 0.78, "sine"); // ضربة الجرس
     playTone(900, 680, 0.04, 0.68, "triangle"); // ارتداد خفيف
     playTone(600, 540, 0.12, 0.5, "sine"); // ذيل الجرس
-  };
+  }, [playTone]);
 
-  const playEndSound = () => {
+  const playEndSound = useCallback(() => {
     // نغمة نهاية مختلفة وواضحة (نزول حاد) عن بداية الحصة
     playTone(520, 520, 0, 0.7, "square"); // نبضة منخفضة
     playTone(400, 480, 0.1, 0.6, "triangle"); // نزول أوضح
     playTone(300, 360, 0.18, 0.5, "sine"); // تذييل عميق
-  };
+  }, [playTone]);
 
   useEffect(() => {
     if (!soundHydrated || typeof window === "undefined") return;
@@ -253,7 +269,7 @@ export const HomeClient = ({ initialData }: Props) => {
       id: active?.id ?? null,
       status: active ? "current" : "idle",
     };
-  }, [now, data.periods, soundEnabled]);
+  }, [now, data.periods, soundEnabled, playEndSound, playStartSound]);
 
   useEffect(() => {
     if (!soundEnabled) return;
@@ -412,7 +428,7 @@ export const HomeClient = ({ initialData }: Props) => {
                 type="button"
                 onClick={() => {
                   setSoundEnabled((prev) => !prev);
-                  ensureAudioContext(true);
+                  unlockAudioContext();
                 }}
                 className={`flex items-center gap-2 rounded-full border px-3 py-2 text-xs font-semibold transition shadow-sm ${soundEnabled ? "bg-emerald-50 border-emerald-200 text-emerald-800" : "bg-white border-slate-200 text-slate-600"}`}
                 aria-pressed={soundEnabled}

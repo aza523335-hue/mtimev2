@@ -8,9 +8,12 @@ import { computeTermStatus } from "@/lib/terms";
 export const dynamic = "force-dynamic";
 
 export async function GET() {
+  const now = new Date();
+  const terms = await prisma.term.findMany({ orderBy: { startDate: "asc" } });
   const settings = await applyAutoDayType(
     await prisma.settings.findFirst(),
-    new Date(),
+    now,
+    { terms },
   );
 
   if (!settings) {
@@ -25,8 +28,7 @@ export async function GET() {
     orderBy: { order: "asc" },
   });
 
-  const terms = await prisma.term.findMany({ orderBy: { startDate: "asc" } });
-  const termStatus = computeTermStatus(terms, new Date());
+  const termStatus = computeTermStatus(terms, now);
 
   const { gregorianDate, hijriDate, gregorianMonthNumber, hijriMonthNumber } =
     getDateInfo();
@@ -43,7 +45,7 @@ export async function GET() {
     hijriDate,
     gregorianMonthNumber,
     hijriMonthNumber,
-    nowIso: new Date().toISOString(),
+    nowIso: now.toISOString(),
     termStatus,
   });
 }

@@ -12,6 +12,7 @@ model Settings {
   autoDayTypeEnabled Boolean  @default(false)
   onSiteDays        String   @default("")
   remoteDays        String   @default("")
+  tuesdayMode       String   @default("FIXED_ON_SITE")
   adminPasswordHash String
   schoolName        String
   managerName       String

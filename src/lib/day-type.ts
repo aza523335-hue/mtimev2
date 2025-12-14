@@ -1,6 +1,13 @@
-import type { Settings } from "@prisma/client";
+import type { Settings, Term } from "@prisma/client";
 
 import { prisma } from "./prisma";
+
+export type TuesdayMode =
+  | "FIXED_ON_SITE"
+  | "FIXED_REMOTE"
+  | "WEEKLY_ALTERNATE"
+  | "TERM_WEEK_BASED"
+  | "MANUAL";
 
 const clampDay = (value: number) => Math.min(6, Math.max(0, value));
 
@@ -39,9 +46,111 @@ export const normalizeDayList = (input: unknown): number[] => {
   );
 };
 
+export const normalizeTuesdayMode = (value?: string | null): TuesdayMode => {
+  const allowed: TuesdayMode[] = [
+    "FIXED_ON_SITE",
+    "FIXED_REMOTE",
+    "WEEKLY_ALTERNATE",
+    "TERM_WEEK_BASED",
+    "MANUAL",
+  ];
+  return allowed.includes(value as TuesdayMode)
+    ? (value as TuesdayMode)
+    : "FIXED_ON_SITE";
+};
+
+const WEEK_MS = 7 * 24 * 60 * 60 * 1000;
+
+const datePartsInZone = (
+  date: Date,
+  timeZone: string,
+): { year: number; month: number; day: number } => {
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  })
+    .formatToParts(date)
+    .reduce<Record<string, string>>((acc, part) => {
+      if (part.type !== "literal") acc[part.type] = part.value;
+      return acc;
+    }, {});
+
+  return {
+    year: Number(parts.year),
+    month: Number(parts.month),
+    day: Number(parts.day),
+  };
+};
+
+const midnightInZone = (date: Date, timeZone: string) => {
+  const parts = datePartsInZone(date, timeZone);
+  return new Date(Date.UTC(parts.year, parts.month - 1, parts.day));
+};
+
+const weeksElapsedSince = (
+  startDate: Date,
+  now: Date,
+  timeZone = "Asia/Riyadh",
+) => {
+  const start = midnightInZone(startDate, timeZone);
+  const today = midnightInZone(now, timeZone);
+  const diff = today.getTime() - start.getTime();
+  return Math.max(0, Math.floor(diff / WEEK_MS));
+};
+
+const findRelevantTermStart = (terms: Term[], now: Date) => {
+  if (!terms?.length) return null;
+  const sorted = [...terms].sort(
+    (a, b) => a.startDate.getTime() - b.startDate.getTime(),
+  );
+  const active = sorted.find(
+    (term) => now >= term.startDate && now <= term.endDate,
+  );
+  if (active) return active.startDate;
+  const upcoming = sorted.find((term) => term.startDate > now);
+  if (upcoming) return upcoming.startDate;
+  return sorted[sorted.length - 1]?.startDate ?? null;
+};
+
+export const resolveTuesdayDayType = ({
+  mode,
+  now = new Date(),
+  terms = [],
+  defaultType = "ON_SITE",
+}: {
+  mode?: string | null;
+  now?: Date;
+  terms?: Term[];
+  defaultType?: "ON_SITE" | "REMOTE";
+}): "ON_SITE" | "REMOTE" => {
+  const normalizedMode = normalizeTuesdayMode(mode);
+
+  if (normalizedMode === "MANUAL") return defaultType;
+  if (normalizedMode === "FIXED_REMOTE") return "REMOTE";
+  if (normalizedMode === "FIXED_ON_SITE") return "ON_SITE";
+
+  if (normalizedMode === "WEEKLY_ALTERNATE") {
+    const referenceWeek = weeksElapsedSince(
+      // Reference Monday near Unix epoch keeps parity stable.
+      new Date(Date.UTC(1970, 0, 5)),
+      now,
+    );
+    return referenceWeek % 2 === 0 ? "ON_SITE" : "REMOTE";
+  }
+
+  const termStart = findRelevantTermStart(terms, now);
+  if (!termStart) return defaultType;
+
+  const elapsedWeeks = weeksElapsedSince(termStart, now);
+  return elapsedWeeks % 2 === 0 ? "ON_SITE" : "REMOTE";
+};
+
 export const applyAutoDayType = async (
   settings: Settings | null,
   now = new Date(),
+  options?: { terms?: Term[] },
 ) => {
   if (!settings) return null;
   if (!settings.autoDayTypeEnabled) return settings;
@@ -70,9 +179,28 @@ export const applyAutoDayType = async (
 
   let desiredType = settings.currentDayType;
 
-  if (remoteDays.includes(todayInRiyadh) && !onSiteDays.includes(todayInRiyadh)) {
+  const normalizedTuesdayMode = normalizeTuesdayMode(settings.tuesdayMode);
+
+  if (todayInRiyadh === 2 && normalizedTuesdayMode !== "MANUAL") {
+    const terms =
+      options?.terms ??
+      (await prisma.term.findMany({ orderBy: { startDate: "asc" } }));
+
+    desiredType = resolveTuesdayDayType({
+      mode: normalizedTuesdayMode,
+      terms,
+      now,
+      defaultType: desiredType as "ON_SITE" | "REMOTE",
+    });
+  } else if (
+    remoteDays.includes(todayInRiyadh) &&
+    !onSiteDays.includes(todayInRiyadh)
+  ) {
     desiredType = "REMOTE";
-  } else if (onSiteDays.includes(todayInRiyadh) && !remoteDays.includes(todayInRiyadh)) {
+  } else if (
+    onSiteDays.includes(todayInRiyadh) &&
+    !remoteDays.includes(todayInRiyadh)
+  ) {
     desiredType = "ON_SITE";
   }
 

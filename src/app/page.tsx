@@ -8,9 +8,11 @@ export const dynamic = "force-dynamic";
 
 export default async function Home() {
   const now = new Date();
+  const terms = await prisma.term.findMany({ orderBy: { startDate: "asc" } });
   const settings = await applyAutoDayType(
     await prisma.settings.findFirst(),
     now,
+    { terms },
   );
 
   if (!settings) {
@@ -30,7 +32,6 @@ export default async function Home() {
     orderBy: { order: "asc" },
   });
 
-  const terms = await prisma.term.findMany({ orderBy: { startDate: "asc" } });
   const termStatus = computeTermStatus(terms, now);
 
   const dates = getDateInfo(now);

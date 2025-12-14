@@ -4,6 +4,7 @@ import Link from "next/link";
 import { type FormEvent, useEffect, useMemo, useRef, useState } from "react";
 
 import { dayTypeLabel } from "@/lib/date-utils";
+import { type TuesdayMode } from "@/lib/day-type";
 
 type Period = {
   id: number;
@@ -28,6 +29,7 @@ type SettingsShape = {
   autoDayTypeEnabled: boolean;
   onSiteDays: number[];
   remoteDays: number[];
+  tuesdayMode: TuesdayMode;
 };
 
 type Props = {
@@ -36,6 +38,46 @@ type Props = {
   onSitePeriods: Period[];
   remotePeriods: Period[];
   terms: TermItem[];
+};
+
+const toDateSafe = (value: string) => {
+  const d = new Date(value);
+  return Number.isNaN(d.getTime()) ? null : d;
+};
+
+const getRelevantTermStart = (terms: TermItem[], now: Date) => {
+  const parsed = terms
+    .map((t) => ({
+      ...t,
+      startDate: toDateSafe(t.startDate),
+      endDate: toDateSafe(t.endDate),
+    }))
+    .filter((t) => t.startDate && t.endDate) as Array<
+    TermItem & { startDate: Date; endDate: Date }
+  >;
+  if (!parsed.length) return null;
+  const sorted = [...parsed].sort(
+    (a, b) => a.startDate.getTime() - b.startDate.getTime(),
+  );
+  const active = sorted.find(
+    (term) => now >= term.startDate && now <= term.endDate,
+  );
+  if (active) return active.startDate;
+  const upcoming = sorted.find((term) => term.startDate > now);
+  if (upcoming) return upcoming.startDate;
+  return sorted[sorted.length - 1]?.startDate ?? null;
+};
+
+const weeksElapsedSince = (start: Date, now: Date) => {
+  const DAY_MS = 24 * 60 * 60 * 1000;
+  const startMid = new Date(
+    Date.UTC(start.getFullYear(), start.getMonth(), start.getDate()),
+  );
+  const nowMid = new Date(
+    Date.UTC(now.getFullYear(), now.getMonth(), now.getDate()),
+  );
+  const diff = nowMid.getTime() - startMid.getTime();
+  return Math.max(0, Math.floor(diff / (7 * DAY_MS)));
 };
 
 export const AdminClient = ({
@@ -63,6 +105,7 @@ export const AdminClient = ({
     ON_SITE: settings.onSiteDays,
     REMOTE: settings.remoteDays,
   });
+  const [tuesdayMode, setTuesdayMode] = useState<TuesdayMode>(settings.tuesdayMode);
   const [editDayType, setEditDayType] = useState<"ON_SITE" | "REMOTE">(
     "ON_SITE",
   );
@@ -105,6 +148,30 @@ export const AdminClient = ({
     { value: 5, label: "الجمعة" },
     { value: 6, label: "السبت" },
   ];
+  const tuesdayModeOptions: { value: TuesdayMode; label: string }[] = [
+    { value: "MANUAL", label: "تعطيل التحكم التلقائي (استخدم التحديد اليدوي)" },
+    { value: "FIXED_ON_SITE", label: "ثابت: حضوري دائمًا" },
+    { value: "FIXED_REMOTE", label: "ثابت: عن بعد دائمًا" },
+    { value: "WEEKLY_ALTERNATE", label: "تبديل أسبوعي تلقائي" },
+    {
+      value: "TERM_WEEK_BASED",
+      label: "تبديل حسب عدد الأسابيع منذ بداية الترم الدراسي",
+    },
+  ];
+  const tuesdayModeResult = useMemo(() => {
+    const now = new Date();
+    if (tuesdayMode === "MANUAL") return null;
+    if (tuesdayMode === "FIXED_REMOTE") return "REMOTE";
+    if (tuesdayMode === "FIXED_ON_SITE") return "ON_SITE";
+    if (tuesdayMode === "WEEKLY_ALTERNATE") {
+      const weeks = weeksElapsedSince(new Date(Date.UTC(1970, 0, 5)), now);
+      return weeks % 2 === 0 ? "ON_SITE" : "REMOTE";
+    }
+    const termStart = getRelevantTermStart(terms, now);
+    if (!termStart) return null;
+    const weeks = weeksElapsedSince(termStart, now);
+    return weeks % 2 === 0 ? "ON_SITE" : "REMOTE";
+  }, [tuesdayMode, terms]);
 
   const addTerm = () => {
     setTerms((prev) => {
@@ -229,6 +296,7 @@ export const AdminClient = ({
         autoDayTypeEnabled,
         onSiteDays: autoDays.ON_SITE,
         remoteDays: autoDays.REMOTE,
+        tuesdayMode,
       }),
     });
 
@@ -240,6 +308,9 @@ export const AdminClient = ({
         payload?.appliedDayType ||
         payload?.settings?.currentDayType ||
         currentDayType;
+      if (payload?.settings?.tuesdayMode) {
+        setTuesdayMode(payload.settings.tuesdayMode);
+      }
       setCurrentDayType(appliedType);
       setMessage("تم حفظ التبديل التلقائي");
       broadcastUpdate();
@@ -453,16 +524,24 @@ export const AdminClient = ({
   const toastTimerRef = useRef<NodeJS.Timeout | null>(null);
 
   useEffect(() => {
+    if (!message && !error) return;
+    setToastVisible(true);
+  }, [message, error]);
+
+  useEffect(() => {
     if (!toastVisible) return;
     if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
     const timer = setTimeout(() => {
       setToastVisible(false);
-    }, 2000);
+    }, 3000);
     toastTimerRef.current = timer;
     return () => clearTimeout(timer);
   }, [toastVisible]);
 
   const showToast = Boolean(toastVisible && (message || error));
+  const SectionDivider = () => (
+    <div className="h-[2px] w-full rounded-full bg-gradient-to-r from-slate-900 via-black to-slate-900 shadow-sm opacity-70" />
+  );
 
   if (!isAuthed) {
     return (
@@ -613,6 +692,8 @@ export const AdminClient = ({
         </div>
       </section>
 
+      <SectionDivider />
+
       <section className={`${panelClass} p-5 space-y-4`}>
         <div className="flex flex-col gap-1">
           <div className="flex items-center gap-2">
@@ -657,6 +738,8 @@ export const AdminClient = ({
           حفظ كلمة المرور
         </button>
       </section>
+
+      <SectionDivider />
 
       <section className={`${panelClass} p-5 space-y-4`}>
         <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
@@ -764,6 +847,8 @@ export const AdminClient = ({
         </div>
       </section>
 
+      <SectionDivider />
+
       <section className={`${panelClass} p-5 space-y-4`}>
         <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
           <div>
@@ -793,6 +878,8 @@ export const AdminClient = ({
           ))}
         </div>
       </section>
+
+      <SectionDivider />
 
       <section className={`${panelClass} p-5 space-y-4`}>
         <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
@@ -837,6 +924,56 @@ export const AdminClient = ({
           </div>
         </div>
 
+        <div className="rounded-xl border border-indigo-100 bg-indigo-50/60 p-4 shadow-inner space-y-2">
+          <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+            <div>
+              <p className="text-sm font-semibold text-slate-800">
+                تبديل يوم الثلاثاء
+              </p>
+              <p className="text-xs text-slate-600">
+                اختر آلية التبديل ليوم الثلاثاء مع التبديل التلقائي.
+              </p>
+            </div>
+            <select
+              className="rounded-lg border border-indigo-200 bg-white px-3 py-2 text-sm focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100 focus:outline-none disabled:bg-slate-50 disabled:text-slate-400"
+              value={tuesdayMode}
+              onChange={(e) => setTuesdayMode(e.target.value as TuesdayMode)}
+              disabled={!autoDayTypeEnabled}
+            >
+              {tuesdayModeOptions.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div className="flex flex-wrap items-center gap-2 text-[11px] text-slate-700">
+            <span>يوم الثلاثاء الحالي:</span>
+            <span
+              className={`rounded-full px-3 py-1 font-semibold ${
+                tuesdayModeResult === "REMOTE"
+                  ? "bg-purple-50 text-purple-700 border border-purple-200"
+                  : tuesdayModeResult === "ON_SITE"
+                    ? "bg-emerald-50 text-emerald-700 border border-emerald-200"
+                    : "bg-slate-100 text-slate-600 border border-slate-200"
+              }`}
+            >
+              {tuesdayModeResult === "REMOTE"
+                ? "عن بُعد (حسب الاختيار)"
+                : tuesdayModeResult === "ON_SITE"
+                  ? "حضوري (حسب الاختيار)"
+                  : "يدوي حسب اختيار الأيام"}
+            </span>
+            <span className="text-slate-500">
+              اختيار الثلاثاء هنا سيطبَّق عند التبديل التلقائي، ويمكنك تعطيله للعودة للاختيار اليدوي من الأزرار.
+            </span>
+          </div>
+          <p className="text-[11px] text-slate-600 leading-relaxed">
+            في وضع الأسابيع من بداية الترم: إذا كان عدد الأسابيع المنقضية زوجيًا يكون
+            الثلاثاء حضوري، وإذا كان فرديًا يكون عن بُعد.
+          </p>
+        </div>
+
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           {(["ON_SITE", "REMOTE"] as const).map((type) => (
             <div
@@ -853,7 +990,13 @@ export const AdminClient = ({
               </div>
               <div className="flex flex-wrap gap-2">
                 {dayOptions.map((day) => {
-                  const active = autoDays[type].includes(day.value);
+                  const isTuesday = day.value === 2;
+                  const modeHighlightsThisType =
+                    isTuesday && tuesdayModeResult === type;
+                  const active =
+                    tuesdayModeResult === null && isTuesday
+                      ? autoDays[type].includes(day.value)
+                      : modeHighlightsThisType || autoDays[type].includes(day.value);
                   return (
                     <button
                       type="button"
@@ -864,9 +1007,10 @@ export const AdminClient = ({
                         active
                           ? "bg-emerald-500 text-white border-emerald-500 shadow-sm hover:bg-emerald-600"
                           : "bg-white text-slate-700 border-slate-200 hover:border-emerald-200 hover:text-emerald-700 disabled:border-slate-200 disabled:text-slate-400"
-                      }`}
+                      } ${modeHighlightsThisType ? "ring-2 ring-indigo-200" : ""}`}
                     >
                       {day.label}
+                      {modeHighlightsThisType ? " (طبق اختيار الثلاثاء)" : ""}
                     </button>
                   );
                 })}
@@ -878,6 +1022,8 @@ export const AdminClient = ({
           في حال التعارض بين النوعين لنفس اليوم سيُحتفظ بآخر اختيار يدوي.
         </p>
       </section>
+
+      <SectionDivider />
 
       <section className={`${panelClass} p-5 space-y-4`}>
         <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">

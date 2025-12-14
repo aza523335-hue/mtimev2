@@ -8,9 +8,12 @@ import { prisma } from "@/lib/prisma";
 export const dynamic = "force-dynamic";
 
 export default async function AdminPage() {
+  const now = new Date();
+  const terms = await prisma.term.findMany({ orderBy: { startDate: "asc" } });
   const settings = await applyAutoDayType(
     await prisma.settings.findFirst(),
-    new Date(),
+    now,
+    { terms },
   );
 
   if (!settings) {
@@ -35,8 +38,6 @@ export default async function AdminPage() {
     orderBy: { order: "asc" },
   });
 
-  const terms = await prisma.term.findMany({ orderBy: { startDate: "asc" } });
-
   const cookieStore = await cookies();
   const session = cookieStore.get(ADMIN_COOKIE_NAME)?.value;
 
@@ -48,6 +49,7 @@ export default async function AdminPage() {
     autoDayTypeEnabled: settings.autoDayTypeEnabled,
     onSiteDays: parseDaysField(settings.onSiteDays),
     remoteDays: parseDaysField(settings.remoteDays),
+    tuesdayMode: settings.tuesdayMode,
   } as const;
 
   return (
