@@ -369,8 +369,6 @@ export const HomeClient = ({ initialData }: Props) => {
           managerName={data.header.managerName}
           gregorianDate={data.gregorianDate}
           hijriDate={data.hijriDate}
-          gregorianMonthNumber={data.gregorianMonthNumber}
-          hijriMonthNumber={data.hijriMonthNumber}
         />
         <div className="flex flex-col gap-2 rounded-2xl bg-white/70 backdrop-blur-md border border-slate-200 p-3 sm:p-4 shadow-sm">
           {data.termStatus ? (

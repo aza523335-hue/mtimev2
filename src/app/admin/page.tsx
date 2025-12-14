@@ -2,7 +2,11 @@ import { cookies } from "next/headers";
 
 import { AdminClient } from "@/components/AdminClient";
 import { ADMIN_COOKIE_NAME, isAdminAuthenticated } from "@/lib/auth";
-import { applyAutoDayType, parseDaysField } from "@/lib/day-type";
+import {
+  applyAutoDayType,
+  normalizeTuesdayMode,
+  parseDaysField,
+} from "@/lib/day-type";
 import { prisma } from "@/lib/prisma";
 
 export const dynamic = "force-dynamic";
@@ -49,7 +53,7 @@ export default async function AdminPage() {
     autoDayTypeEnabled: settings.autoDayTypeEnabled,
     onSiteDays: parseDaysField(settings.onSiteDays),
     remoteDays: parseDaysField(settings.remoteDays),
-    tuesdayMode: settings.tuesdayMode,
+    tuesdayMode: normalizeTuesdayMode(settings.tuesdayMode),
   } as const;
 
   return (
