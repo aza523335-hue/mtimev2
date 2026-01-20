@@ -31,6 +31,8 @@ export async function POST(request: Request) {
     settings = await prisma.settings.create({
       data: {
         currentDayType: "ON_SITE",
+        tuesdayOddWeekType: "ON_SITE",
+        tuesdayEvenWeekType: "REMOTE",
         adminPasswordHash: defaultHash,
         schoolName: "مدرسة المستقبل",
         managerName: "أ. محمد العتيبي",

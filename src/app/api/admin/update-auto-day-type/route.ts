@@ -7,6 +7,7 @@ import {
 } from "@/lib/auth";
 import {
   applyAutoDayType,
+  normalizeDayType,
   normalizeDayList,
   normalizeTuesdayMode,
   serializeDaysField,
@@ -34,6 +35,8 @@ export async function POST(request: Request) {
     const onSiteDays = normalizeDayList(body?.onSiteDays);
     const remoteDays = normalizeDayList(body?.remoteDays);
     const tuesdayMode = normalizeTuesdayMode(body?.tuesdayMode);
+    const tuesdayOddWeekType = normalizeDayType(body?.tuesdayOddWeekType);
+    const tuesdayEvenWeekType = normalizeDayType(body?.tuesdayEvenWeekType);
 
     const updated = await prisma.settings.update({
       where: { id: settings.id },
@@ -42,6 +45,8 @@ export async function POST(request: Request) {
         onSiteDays: serializeDaysField(onSiteDays),
         remoteDays: serializeDaysField(remoteDays),
         tuesdayMode,
+        tuesdayOddWeekType,
+        tuesdayEvenWeekType,
       },
     });
 

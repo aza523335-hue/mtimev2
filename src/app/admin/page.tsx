@@ -4,6 +4,7 @@ import { AdminClient } from "@/components/AdminClient";
 import { ADMIN_COOKIE_NAME, isAdminAuthenticated } from "@/lib/auth";
 import {
   applyAutoDayType,
+  normalizeDayType,
   normalizeTuesdayMode,
   parseDaysField,
 } from "@/lib/day-type";
@@ -54,6 +55,8 @@ export default async function AdminPage() {
     onSiteDays: parseDaysField(settings.onSiteDays),
     remoteDays: parseDaysField(settings.remoteDays),
     tuesdayMode: normalizeTuesdayMode(settings.tuesdayMode),
+    tuesdayOddWeekType: normalizeDayType(settings.tuesdayOddWeekType),
+    tuesdayEvenWeekType: normalizeDayType(settings.tuesdayEvenWeekType),
   } as const;
 
   return (

@@ -13,6 +13,8 @@ model Settings {
   onSiteDays        String   @default("")
   remoteDays        String   @default("")
   tuesdayMode       String   @default("FIXED_ON_SITE")
+  tuesdayOddWeekType String  @default("ON_SITE")
+  tuesdayEvenWeekType String @default("REMOTE")
   adminPasswordHash String
   schoolName        String
   managerName       String

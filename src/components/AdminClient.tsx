@@ -4,7 +4,7 @@ import Link from "next/link";
 import { type FormEvent, useEffect, useMemo, useRef, useState } from "react";
 
 import { dayTypeLabel } from "@/lib/date-utils";
-import { type TuesdayMode } from "@/lib/day-type";
+import { type DayType, type TuesdayMode } from "@/lib/day-type";
 
 type Period = {
   id: number;
@@ -30,6 +30,8 @@ type SettingsShape = {
   onSiteDays: number[];
   remoteDays: number[];
   tuesdayMode: TuesdayMode;
+  tuesdayOddWeekType: DayType;
+  tuesdayEvenWeekType: DayType;
 };
 
 type Props = {
@@ -106,6 +108,12 @@ export const AdminClient = ({
     REMOTE: settings.remoteDays,
   });
   const [tuesdayMode, setTuesdayMode] = useState<TuesdayMode>(settings.tuesdayMode);
+  const [tuesdayOddWeekType, setTuesdayOddWeekType] = useState<DayType>(
+    settings.tuesdayOddWeekType,
+  );
+  const [tuesdayEvenWeekType, setTuesdayEvenWeekType] = useState<DayType>(
+    settings.tuesdayEvenWeekType,
+  );
   const [editDayType, setEditDayType] = useState<"ON_SITE" | "REMOTE">(
     "ON_SITE",
   );
@@ -153,6 +161,7 @@ export const AdminClient = ({
     { value: "FIXED_ON_SITE", label: "ثابت: حضوري دائمًا" },
     { value: "FIXED_REMOTE", label: "ثابت: عن بعد دائمًا" },
     { value: "WEEKLY_ALTERNATE", label: "تبديل أسبوعي تلقائي" },
+    { value: "WEEK_NUMBER_BASED", label: "حسب رقم الأسبوع من بداية الترم (فردي/زوجي)" },
     {
       value: "TERM_WEEK_BASED",
       label: "تبديل حسب عدد الأسابيع منذ بداية الترم الدراسي",
@@ -163,15 +172,33 @@ export const AdminClient = ({
     if (tuesdayMode === "MANUAL") return null;
     if (tuesdayMode === "FIXED_REMOTE") return "REMOTE";
     if (tuesdayMode === "FIXED_ON_SITE") return "ON_SITE";
+    if (tuesdayMode === "WEEK_NUMBER_BASED") {
+      const termStart = getRelevantTermStart(terms, now);
+      if (!termStart) return null;
+      const weekNumber = weeksElapsedSince(termStart, now) + 1;
+      return weekNumber % 2 === 1 ? tuesdayOddWeekType : tuesdayEvenWeekType;
+    }
     if (tuesdayMode === "WEEKLY_ALTERNATE") {
       const weeks = weeksElapsedSince(new Date(Date.UTC(1970, 0, 5)), now);
       return weeks % 2 === 0 ? "ON_SITE" : "REMOTE";
     }
     const termStart = getRelevantTermStart(terms, now);
     if (!termStart) return null;
-    const weeks = weeksElapsedSince(termStart, now);
-    return weeks % 2 === 0 ? "ON_SITE" : "REMOTE";
-  }, [tuesdayMode, terms]);
+    const weekNumber = weeksElapsedSince(termStart, now) + 1;
+    return weekNumber % 2 === 1 ? "ON_SITE" : "REMOTE";
+  }, [tuesdayMode, terms, tuesdayOddWeekType, tuesdayEvenWeekType]);
+  const tuesdayWeekNumber = useMemo(() => {
+    const now = new Date();
+    const termStart = getRelevantTermStart(terms, now);
+    if (!termStart) return null;
+    return weeksElapsedSince(termStart, now) + 1;
+  }, [terms]);
+  const tuesdayWeekParityLabel =
+    tuesdayWeekNumber === null
+      ? null
+      : tuesdayWeekNumber % 2 === 1
+        ? "فردي"
+        : "زوجي";
 
   const addTerm = () => {
     setTerms((prev) => {
@@ -297,6 +324,8 @@ export const AdminClient = ({
         onSiteDays: autoDays.ON_SITE,
         remoteDays: autoDays.REMOTE,
         tuesdayMode,
+        tuesdayOddWeekType,
+        tuesdayEvenWeekType,
       }),
     });
 
@@ -310,6 +339,12 @@ export const AdminClient = ({
         currentDayType;
       if (payload?.settings?.tuesdayMode) {
         setTuesdayMode(payload.settings.tuesdayMode);
+      }
+      if (payload?.settings?.tuesdayOddWeekType) {
+        setTuesdayOddWeekType(payload.settings.tuesdayOddWeekType);
+      }
+      if (payload?.settings?.tuesdayEvenWeekType) {
+        setTuesdayEvenWeekType(payload.settings.tuesdayEvenWeekType);
       }
       setCurrentDayType(appliedType);
       setMessage("تم حفظ التبديل التلقائي");
@@ -947,6 +982,38 @@ export const AdminClient = ({
               ))}
             </select>
           </div>
+          {tuesdayMode === "WEEK_NUMBER_BASED" && (
+            <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
+              <div className="space-y-1">
+                <label className="text-xs text-slate-600">الأسبوع الفردي</label>
+                <select
+                  className="w-full rounded-lg border border-indigo-200 bg-white px-3 py-2 text-sm focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100 focus:outline-none disabled:bg-slate-50 disabled:text-slate-400"
+                  value={tuesdayOddWeekType}
+                  onChange={(e) =>
+                    setTuesdayOddWeekType(e.target.value as DayType)
+                  }
+                  disabled={!autoDayTypeEnabled}
+                >
+                  <option value="ON_SITE">حضوري</option>
+                  <option value="REMOTE">عن بُعد</option>
+                </select>
+              </div>
+              <div className="space-y-1">
+                <label className="text-xs text-slate-600">الأسبوع الزوجي</label>
+                <select
+                  className="w-full rounded-lg border border-indigo-200 bg-white px-3 py-2 text-sm focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100 focus:outline-none disabled:bg-slate-50 disabled:text-slate-400"
+                  value={tuesdayEvenWeekType}
+                  onChange={(e) =>
+                    setTuesdayEvenWeekType(e.target.value as DayType)
+                  }
+                  disabled={!autoDayTypeEnabled}
+                >
+                  <option value="ON_SITE">حضوري</option>
+                  <option value="REMOTE">عن بُعد</option>
+                </select>
+              </div>
+            </div>
+          )}
           <div className="flex flex-wrap items-center gap-2 text-[11px] text-slate-700">
             <span>يوم الثلاثاء الحالي:</span>
             <span
@@ -964,13 +1031,22 @@ export const AdminClient = ({
                   ? "حضوري (حسب الاختيار)"
                   : "يدوي حسب اختيار الأيام"}
             </span>
+            {tuesdayMode === "WEEK_NUMBER_BASED" && tuesdayWeekNumber !== null && (
+              <span className="text-slate-600">
+                رقم الأسبوع الحالي: {tuesdayWeekNumber} ({tuesdayWeekParityLabel})
+              </span>
+            )}
+            {tuesdayMode === "WEEK_NUMBER_BASED" && tuesdayWeekNumber === null && (
+              <span className="text-slate-500">لا يمكن حساب رقم الأسبوع بدون أترام.</span>
+            )}
             <span className="text-slate-500">
               اختيار الثلاثاء هنا سيطبَّق عند التبديل التلقائي، ويمكنك تعطيله للعودة للاختيار اليدوي من الأزرار.
             </span>
           </div>
           <p className="text-[11px] text-slate-600 leading-relaxed">
-            في وضع الأسابيع من بداية الترم: إذا كان عدد الأسابيع المنقضية زوجيًا يكون
-            الثلاثاء حضوري، وإذا كان فرديًا يكون عن بُعد.
+            في وضع رقم الأسبوع: يعتمد الثلاثاء على رقم الأسبوع من بداية الترم الحالي،
+            والأسبوع الأول رقمه 1 (فردي). في وضع الأسابيع من بداية الترم: إذا كان
+            رقم الأسبوع فرديًا يكون الثلاثاء حضوري، وإذا كان زوجيًا يكون عن بُعد.
           </p>
         </div>
 

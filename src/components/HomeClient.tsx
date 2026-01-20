@@ -175,11 +175,26 @@ export const HomeClient = ({ initialData }: Props) => {
 
   useEffect(() => {
     if (typeof window === "undefined") return;
-    const saved = window.localStorage.getItem("period-sound-enabled");
     // eslint-disable-next-line react-hooks/set-state-in-effect
-    setSoundEnabled(saved === "true");
+    setSoundEnabled(true);
     setSoundHydrated(true);
   }, []);
+
+  useEffect(() => {
+    if (!soundEnabled || soundUnlocked || typeof window === "undefined") return;
+
+    const handleFirstGesture = () => {
+      unlockAudioContext();
+    };
+
+    window.addEventListener("pointerdown", handleFirstGesture, { once: true });
+    window.addEventListener("keydown", handleFirstGesture, { once: true });
+
+    return () => {
+      window.removeEventListener("pointerdown", handleFirstGesture);
+      window.removeEventListener("keydown", handleFirstGesture);
+    };
+  }, [soundEnabled, soundUnlocked, unlockAudioContext]);
 
   const playTone = useCallback(
     (
@@ -204,7 +219,7 @@ export const HomeClient = ({ initialData }: Props) => {
       const startAt = ctx.currentTime + offsetSeconds;
       const endAt = startAt + durationMs / 1000;
 
-      const level = Math.min(Math.max(volume, 0.01), 0.8);
+      const level = Math.min(Math.max(volume, 0.01), 1);
       gainNode.gain.setValueAtTime(level, startAt);
       gainNode.gain.exponentialRampToValueAtTime(0.0001, endAt);
 
@@ -248,6 +263,10 @@ export const HomeClient = ({ initialData }: Props) => {
     );
 
     const prev = lastPeriodRef.current;
+    const prevPeriod = prev?.id
+      ? normalized.find((period) => period.id === prev.id)
+      : null;
+    const timeClose = (a: Date, b: Date) => Math.abs(a.getTime() - b.getTime()) <= 1000;
 
     if (!prev) {
       lastPeriodRef.current = {
@@ -258,7 +277,15 @@ export const HomeClient = ({ initialData }: Props) => {
     }
 
     if (prev.status === "current" && (!active || active.id !== prev.id)) {
-      playEndSound();
+      const sameTime =
+        prevPeriod &&
+        ((active && timeClose(prevPeriod.end, active.start)) ||
+          timeClose(prevPeriod.end, prevPeriod.start));
+      if (sameTime) {
+        playStartSound();
+      } else {
+        playEndSound();
+      }
     }
 
     if (active && prev.id !== active.id) {
@@ -360,6 +387,13 @@ export const HomeClient = ({ initialData }: Props) => {
       ended: chosen.remainingMs <= 0,
     };
   })();
+  const termWeekNumber = (() => {
+    if (!data.termStatus) return null;
+    const weekMs = 7 * 24 * 60 * 60 * 1000;
+    const termStart = new Date(data.termStatus.startDate);
+    const weeksSinceStart = Math.floor((now.getTime() - termStart.getTime()) / weekMs) + 1;
+    return Math.max(1, weeksSinceStart);
+  })();
 
   return (
     <div className="space-y-6">
@@ -373,10 +407,15 @@ export const HomeClient = ({ initialData }: Props) => {
         <div className="flex flex-col gap-2 rounded-2xl bg-white/70 backdrop-blur-md border border-slate-200 p-3 sm:p-4 shadow-sm">
           {data.termStatus ? (
             <div className="rounded-xl border border-slate-200 bg-white/70 p-2 sm:p-2.5 flex flex-col gap-1">
-              <div className="flex items-start justify-between gap-2">
-                <h3 className="text-sm font-bold text-slate-900">
+              <div className="flex items-start gap-2">
+                <h3 className="min-w-0 text-sm font-bold text-slate-900">
                   {data.termStatus.name}
                 </h3>
+                {termWeekNumber !== null ? (
+                  <span className="flex-1 text-center text-[11px] font-semibold text-slate-500">
+                    الاسبوع {termWeekNumber}
+                  </span>
+                ) : null}
                 <span
                   className={`rounded-full px-2.5 py-1 text-[11px] font-semibold whitespace-nowrap ${
                     data.termStatus.status === "active"
@@ -490,7 +529,7 @@ export const HomeClient = ({ initialData }: Props) => {
         </div>
       )}
 
-      <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-3 xl:grid-cols-3 gap-5">
+      <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-4 gap-y-[2mm] gap-x-[3mm] sm:gap-5">
         {data.periods.map((period) => (
           <PeriodCard
             key={`${period.dayType}-${period.order}`}

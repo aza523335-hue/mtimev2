@@ -56,12 +56,16 @@ async function main() {
     where: { id: 1 },
     update: {
       currentDayType: "ON_SITE",
+      tuesdayOddWeekType: "ON_SITE",
+      tuesdayEvenWeekType: "REMOTE",
       adminPasswordHash,
       schoolName: "مدرسة المستقبل",
       managerName: "أ. محمد العتيبي",
     },
     create: {
       currentDayType: "ON_SITE",
+      tuesdayOddWeekType: "ON_SITE",
+      tuesdayEvenWeekType: "REMOTE",
       adminPasswordHash,
       schoolName: "مدرسة المستقبل",
       managerName: "أ. محمد العتيبي",

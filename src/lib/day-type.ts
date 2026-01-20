@@ -7,7 +7,13 @@ export type TuesdayMode =
   | "FIXED_REMOTE"
   | "WEEKLY_ALTERNATE"
   | "TERM_WEEK_BASED"
+  | "WEEK_NUMBER_BASED"
   | "MANUAL";
+
+export type DayType = "ON_SITE" | "REMOTE";
+
+export const normalizeDayType = (value?: string | null): DayType =>
+  value === "REMOTE" ? "REMOTE" : "ON_SITE";
 
 const clampDay = (value: number) => Math.min(6, Math.max(0, value));
 
@@ -52,6 +58,7 @@ export const normalizeTuesdayMode = (value?: string | null): TuesdayMode => {
     "FIXED_REMOTE",
     "WEEKLY_ALTERNATE",
     "TERM_WEEK_BASED",
+    "WEEK_NUMBER_BASED",
     "MANUAL",
   ];
   return allowed.includes(value as TuesdayMode)
@@ -119,17 +126,30 @@ export const resolveTuesdayDayType = ({
   now = new Date(),
   terms = [],
   defaultType = "ON_SITE",
+  oddWeekType = "ON_SITE",
+  evenWeekType = "REMOTE",
 }: {
   mode?: string | null;
   now?: Date;
   terms?: Term[];
-  defaultType?: "ON_SITE" | "REMOTE";
-}): "ON_SITE" | "REMOTE" => {
+  defaultType?: DayType;
+  oddWeekType?: DayType;
+  evenWeekType?: DayType;
+}): DayType => {
   const normalizedMode = normalizeTuesdayMode(mode);
+  const normalizedOdd = normalizeDayType(oddWeekType);
+  const normalizedEven = normalizeDayType(evenWeekType);
 
   if (normalizedMode === "MANUAL") return defaultType;
   if (normalizedMode === "FIXED_REMOTE") return "REMOTE";
   if (normalizedMode === "FIXED_ON_SITE") return "ON_SITE";
+
+  if (normalizedMode === "WEEK_NUMBER_BASED") {
+    const termStart = findRelevantTermStart(terms, now);
+    if (!termStart) return defaultType;
+    const weekNumber = weeksElapsedSince(termStart, now) + 1;
+    return weekNumber % 2 === 1 ? normalizedOdd : normalizedEven;
+  }
 
   if (normalizedMode === "WEEKLY_ALTERNATE") {
     const referenceWeek = weeksElapsedSince(
@@ -143,8 +163,8 @@ export const resolveTuesdayDayType = ({
   const termStart = findRelevantTermStart(terms, now);
   if (!termStart) return defaultType;
 
-  const elapsedWeeks = weeksElapsedSince(termStart, now);
-  return elapsedWeeks % 2 === 0 ? "ON_SITE" : "REMOTE";
+  const weekNumber = weeksElapsedSince(termStart, now) + 1;
+  return weekNumber % 2 === 1 ? "ON_SITE" : "REMOTE";
 };
 
 export const applyAutoDayType = async (
@@ -190,7 +210,9 @@ export const applyAutoDayType = async (
       mode: normalizedTuesdayMode,
       terms,
       now,
-      defaultType: desiredType as "ON_SITE" | "REMOTE",
+      defaultType: normalizeDayType(desiredType),
+      oddWeekType: normalizeDayType(settings.tuesdayOddWeekType),
+      evenWeekType: normalizeDayType(settings.tuesdayEvenWeekType),
     });
   } else if (
     remoteDays.includes(todayInRiyadh) &&
