@@ -30,6 +30,11 @@ pending migrations with `prisma migrate deploy`; it does not generate migrations
 `npm run db:seed` is also safe to repeat, but requires an existing schema.
 Run `npm run test:db` to exercise startup against isolated temporary databases.
 
+The `@prisma/config` override in `package.json` selects `deepmerge-ts` 8.0.2
+to fix GHSA-ggr8-5vv4-36mx. Prisma 6.19.3 still pins the affected 7.1.5 release.
+Recheck this override when upgrading Prisma; the startup tests cover config
+loading, baselining, migrations, and seeding with the overridden dependency.
+
 First, run the development server:
 
 ```bash
