@@ -1,7 +1,6 @@
 /* eslint-disable @typescript-eslint/no-require-imports */
 require("dotenv/config");
 const { PrismaClient } = require("@prisma/client");
-const { PrismaLibSql } = require("@prisma/adapter-libsql");
 const crypto = require("crypto");
 
 const url = process.env.DATABASE_URL;
@@ -10,9 +9,7 @@ if (!url) {
   throw new Error("DATABASE_URL is not set");
 }
 
-const adapter = new PrismaLibSql({ url });
-
-const prisma = new PrismaClient({ adapter });
+const prisma = new PrismaClient();
 
 const hashPassword = (value) =>
   crypto.createHash("sha256").update(value).digest("hex");
@@ -34,78 +31,78 @@ const remotePeriods = [
   ["11:50", "12:25"],
 ];
 
-async function main() {
-  const password = process.env.DEFAULT_ADMIN_PASSWORD || "admin123";
-  const adminPasswordHash = hashPassword(password);
+async function seedDatabase() {
+  try {
+    return await prisma.$transaction(async (tx) => {
+      const counts = await Promise.all([
+        tx.settings.count(), tx.period.count(), tx.term.count(),
+      ]);
+      if (counts.some((count) => count > 0)) {
+        console.log("Database contains data; skipping seed.");
+        return;
+      }
+      const password = process.env.DEFAULT_ADMIN_PASSWORD || "admin123";
+      const adminPasswordHash = hashPassword(password);
 
-  const currentYear = new Date().getFullYear();
-  const defaultTerms = [
-    {
-      name: `الترم الأول ${currentYear}`,
-      startDate: new Date(`${currentYear}-08-18T00:00:00.000Z`),
-      endDate: new Date(`${currentYear}-11-30T23:59:59.000Z`),
-    },
-    {
-      name: `الترم الثاني ${currentYear}`,
-      startDate: new Date(`${currentYear}-12-15T00:00:00.000Z`),
-      endDate: new Date(`${currentYear + 1}-03-01T23:59:59.000Z`),
-    },
-  ];
+      const currentYear = new Date().getFullYear();
+      const defaultTerms = [
+        {
+          name: `الترم الأول ${currentYear}`,
+          startDate: new Date(`${currentYear}-08-18T00:00:00.000Z`),
+          endDate: new Date(`${currentYear}-11-30T23:59:59.000Z`),
+        },
+        {
+          name: `الترم الثاني ${currentYear}`,
+          startDate: new Date(`${currentYear}-12-15T00:00:00.000Z`),
+          endDate: new Date(`${currentYear + 1}-03-01T23:59:59.000Z`),
+        },
+      ];
 
-  await prisma.settings.upsert({
-    where: { id: 1 },
-    update: {
-      currentDayType: "ON_SITE",
-      tuesdayOddWeekType: "ON_SITE",
-      tuesdayEvenWeekType: "REMOTE",
-      adminPasswordHash,
-      schoolName: "مدرسة المستقبل",
-      managerName: "أ. محمد العتيبي",
-    },
-    create: {
-      currentDayType: "ON_SITE",
-      tuesdayOddWeekType: "ON_SITE",
-      tuesdayEvenWeekType: "REMOTE",
-      adminPasswordHash,
-      schoolName: "مدرسة المستقبل",
-      managerName: "أ. محمد العتيبي",
-    },
-  });
+      await tx.settings.create({
+        data: {
+          currentDayType: "ON_SITE",
+          tuesdayOddWeekType: "ON_SITE",
+          tuesdayEvenWeekType: "REMOTE",
+          adminPasswordHash,
+          schoolName: "مدرسة المستقبل",
+          managerName: "أ. محمد العتيبي",
+        },
+      });
 
-  await prisma.period.deleteMany();
+      await tx.period.createMany({
+        data: onSitePeriods.map(([start, end], index) => ({
+          dayType: "ON_SITE",
+          order: index + 1,
+          name: `الحصة ${index + 1}`,
+          startTime: start,
+          endTime: end,
+        })),
+      });
 
-  await prisma.period.createMany({
-    data: onSitePeriods.map(([start, end], index) => ({
-      dayType: "ON_SITE",
-      order: index + 1,
-      name: `الحصة ${index + 1}`,
-      startTime: start,
-      endTime: end,
-    })),
-  });
+      await tx.period.createMany({
+        data: remotePeriods.map(([start, end], index) => ({
+          dayType: "REMOTE",
+          order: index + 1,
+          name: `الحصة ${index + 1}`,
+          startTime: start,
+          endTime: end,
+        })),
+      });
 
-  await prisma.period.createMany({
-    data: remotePeriods.map(([start, end], index) => ({
-      dayType: "REMOTE",
-      order: index + 1,
-      name: `الحصة ${index + 1}`,
-      startTime: start,
-      endTime: end,
-    })),
-  });
+      await tx.term.createMany({ data: defaultTerms });
 
-  await prisma.term.deleteMany();
-  await prisma.term.createMany({ data: defaultTerms });
-
-  console.log("Database seeded.");
-  console.log(`Default admin password: ${password}`);
+      console.log("Database seeded.");
+    });
+  } finally {
+    await prisma.$disconnect();
+  }
 }
 
-main()
-  .catch((e) => {
+module.exports = { seedDatabase };
+
+if (require.main === module) {
+  seedDatabase().catch((e) => {
     console.error(e);
-    process.exit(1);
-  })
-  .finally(async () => {
-    await prisma.$disconnect();
+    process.exitCode = 1;
   });
+}

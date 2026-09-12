@@ -2,6 +2,34 @@ This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-
 
 ## Getting Started
 
+### Database startup
+
+`npm start` runs `db:init` before starting Next.js. Set `DATABASE_URL` to a SQLite
+file (for example `file:/app/data/dev.db`). Missing parent directories and the
+database are created automatically. Startup applies committed Prisma migrations,
+then seeds only when Settings, Period, and Term are all empty. Seeding is a single
+transaction; existing data, including customized passwords and schedules, is
+never reset by the seed. A partially populated database is also left unchanged.
+Initialization failure prevents the web server from starting.
+
+Databases created by the previous `db push` startup are automatically baselined
+when their schema matches the initial migration. A different legacy schema stops
+startup for manual reconciliation instead of risking existing data.
+
+Set `DEFAULT_ADMIN_PASSWORD` for the first seed (otherwise the existing default,
+`admin123`, is used). Docker initializes at runtime; no seeded database is baked
+into the image. Compose persists `/app/data` in the `mtime-data` volume. When
+upgrading an existing deployment, back up and move its database to that volume
+before replacing the old container, or mount its existing database directory at
+`/app/data`. Otherwise the new volume starts with a fresh database.
+
+For local development, run `npm run db:init` before `npm run dev`. For future
+schema changes, run `npx prisma migrate dev --name <change>` against a development
+database and commit the generated `prisma/migrations` files. Startup applies
+pending migrations with `prisma migrate deploy`; it does not generate migrations.
+`npm run db:seed` is also safe to repeat, but requires an existing schema.
+Run `npm run test:db` to exercise startup against isolated temporary databases.
+
 First, run the development server:
 
 ```bash

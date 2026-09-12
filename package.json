@@ -6,18 +6,21 @@
     "dev": "next dev --webpack",
     "build": "next build --webpack",
     "start": "next start",
-    "prestart": "npm run db:push",
+    "prestart": "npm run db:init",
     "lint": "eslint",
+    "test:db": "node --test prisma/startup.test.js",
     "db:push": "prisma db push --config=prisma.config.ts",
-    "db:seed": "npm run db:push && prisma db seed --config=prisma.config.ts"
+    "db:init": "node prisma/startup.js",
+    "db:migrate": "prisma migrate deploy --config=prisma.config.ts",
+    "db:seed": "prisma db seed --config=prisma.config.ts"
   },
   "dependencies": {
     "@libsql/client": "^0.15.15",
-    "@prisma/adapter-libsql": "^7.1.0",
-    "@prisma/client": "^7.1.0",
+    "@prisma/adapter-libsql": "^6.19.2",
+    "@prisma/client": "^6.19.2",
     "hijri-date": "^0.2.2",
     "next": "^16.0.7",
-    "prisma": "^7.1.0",
+    "prisma": "^6.19.2",
     "react": "19.2.0",
     "react-dom": "19.2.0"
   },
@@ -31,8 +34,5 @@
     "eslint-config-next": "16.0.7",
     "tailwindcss": "^4",
     "typescript": "^5"
-  },
-  "prisma": {
-    "seed": "node prisma/seed.js"
   }
 }

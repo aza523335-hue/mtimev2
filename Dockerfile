@@ -1,7 +1,7 @@
 FROM node:20-bookworm-slim AS base
 WORKDIR /app
 ENV PRISMA_CONFIG_PATH=/app/prisma.config.ts
-ENV DATABASE_URL=file:./prisma/dev.db
+ENV DATABASE_URL=file:/app/prisma/dev.db
 
 FROM base AS deps
 RUN apt-get update \
@@ -13,7 +13,7 @@ RUN npm ci
 FROM deps AS builder
 ENV NEXT_TELEMETRY_DISABLED=1
 ENV PRISMA_CONFIG_PATH=/app/prisma.config.ts
-ARG DATABASE_URL=file:./prisma/dev.db
+ARG DATABASE_URL=file:/app/prisma/dev.db
 ENV DATABASE_URL=${DATABASE_URL}
 COPY prisma ./prisma
 COPY tsconfig.json next.config.ts postcss.config.mjs eslint.config.mjs ./
@@ -21,11 +21,11 @@ COPY prisma.config.ts ./prisma.config.ts
 COPY src ./src
 COPY public ./public
 RUN npx prisma generate
-RUN npm run db:seed
 RUN npm run build
 RUN npm prune --omit=dev
 
 FROM base AS runner
+ENV DATABASE_URL=file:/app/data/dev.db
 ENV NODE_ENV=production
 ENV NEXT_TELEMETRY_DISABLED=1
 ENV PRISMA_CONFIG_PATH=/app/prisma.config.ts
@@ -39,5 +39,5 @@ COPY --from=builder /app/.next ./.next
 COPY --from=builder /app/public ./public
 COPY --from=builder /app/prisma ./prisma
 COPY --from=builder /app/prisma.config.ts ./prisma.config.ts
-EXPOSE 3000
+EXPOSE 3001
 CMD ["npm", "run", "start"]
