@@ -79,6 +79,7 @@ export const HomeClient = ({ initialData }: Props) => {
   const [data, setData] = useState(initialData);
   const [now, setNow] = useState(() => new Date(initialData.nowIso));
   const [error, setError] = useState<string | null>(null);
+  const [showCompleted, setShowCompleted] = useState(false);
   const [soundEnabled, setSoundEnabled] = useState(false);
   const [soundUnlocked, setSoundUnlocked] = useState(false);
   const [soundHydrated, setSoundHydrated] = useState(false);
@@ -387,6 +388,13 @@ export const HomeClient = ({ initialData }: Props) => {
       ended: chosen.remainingMs <= 0,
     };
   })();
+  const todayPeriods = normalizePeriods(now, data.periods);
+  const completedCount = todayPeriods.filter((period) => now >= period.end).length;
+  const allCompleted = todayPeriods.length > 0 && completedCount === todayPeriods.length;
+  const visiblePeriods = showCompleted
+    ? todayPeriods
+    : todayPeriods.filter((period) => now < period.end);
+
   const termWeekNumber = (() => {
     if (!data.termStatus) return null;
     const weekMs = 7 * 24 * 60 * 60 * 1000;
@@ -529,11 +537,36 @@ export const HomeClient = ({ initialData }: Props) => {
         </div>
       )}
 
-      <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-4 gap-y-[2mm] gap-x-[3mm] sm:gap-5">
-        {data.periods.map((period) => (
+      {completedCount > 0 && (
+        <div className="flex justify-end">
+          <button
+            type="button"
+            onClick={() => setShowCompleted((previous) => !previous)}
+            aria-pressed={showCompleted}
+            aria-controls="period-cards"
+            className="rounded-full border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 focus-visible:outline-2 focus-visible:outline-indigo-600"
+          >
+            {showCompleted ? "إخفاء الحصص المنتهية" : `إظهار الحصص المنتهية (${completedCount})`}
+          </button>
+        </div>
+      )}
+
+      <div role="status" className="text-center text-slate-700">
+        {allCompleted && (
+          <p className="rounded-xl border border-emerald-200 bg-emerald-50 p-5 font-semibold">انتهت حصص اليوم</p>
+        )}
+        {todayPeriods.length === 0 && (
+          <p className="rounded-xl border border-slate-200 bg-slate-50 p-5">لا توجد حصص في جدول هذا اليوم</p>
+        )}
+      </div>
+
+      <div id="period-cards" className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-4 gap-y-[2mm] gap-x-[3mm] sm:gap-5">
+        {visiblePeriods.map((period) => (
           <PeriodCard
             key={`${period.dayType}-${period.order}`}
             period={period}
+            start={period.start}
+            end={period.end}
             now={now}
           />
         ))}

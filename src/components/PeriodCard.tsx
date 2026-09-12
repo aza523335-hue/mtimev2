@@ -45,16 +45,18 @@ const formatTime12 = (date: Date) => {
 type Props = {
   period: Period;
   now: Date;
+  start?: Date;
+  end?: Date;
 };
 
-export const PeriodCard = ({ period, now }: Props) => {
-  const start = parseTime(period.startTime, now);
-  const end = parseTime(period.endTime, now);
+export const PeriodCard = ({ period, now, start: resolvedStart, end: resolvedEnd }: Props) => {
+  const start = resolvedStart ?? parseTime(period.startTime, now);
+  const end = resolvedEnd ?? parseTime(period.endTime, now);
 
   let status: "upcoming" | "current" | "done" = "done";
   if (now < start) {
     status = "upcoming";
-  } else if (now >= start && now <= end) {
+  } else if (now >= start && now < end) {
     status = "current";
   }
 
@@ -67,13 +69,6 @@ export const PeriodCard = ({ period, now }: Props) => {
   const statusLabel =
     status === "current" ? "جارية الآن" : status === "upcoming" ? "قادمة" : "منتهية";
   const displayName = period.name && period.name.trim().length > 0 ? period.name : `الحصة ${period.order}`;
-
-  const badgeClass =
-    status === "current"
-      ? "bg-emerald-200 text-emerald-900"
-      : status === "upcoming"
-        ? "bg-blue-200 text-blue-900"
-        : "bg-slate-200 text-slate-700";
 
   const accent =
     status === "current"

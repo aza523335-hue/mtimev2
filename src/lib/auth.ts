@@ -24,3 +24,13 @@ export const isAdminAuthenticated = (
 
 export const createAdminCookie = (settings: Settings) =>
   buildSessionToken(settings.adminPasswordHash);
+
+// Reverse proxies may terminate TLS before forwarding HTTP to Next.js.
+export const adminCookieOptions = (request: Request) => ({
+  httpOnly: true,
+  sameSite: "lax" as const,
+  secure: new URL(request.url).protocol === "https:" ||
+    request.headers.get("x-forwarded-proto")?.split(",")[0].trim().toLowerCase() === "https",
+  path: "/",
+  maxAge: 60 * 60 * 6,
+});

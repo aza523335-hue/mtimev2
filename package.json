@@ -8,6 +8,8 @@
     "start": "next start",
     "prestart": "npm run db:init",
     "lint": "eslint",
+    "test:auth": "node --test src/lib/auth.test.mjs",
+    "test:schedule": "node --test src/lib/schedule.test.mjs",
     "test:db": "node --test prisma/startup.test.js",
     "db:push": "prisma db push --config=prisma.config.ts",
     "db:init": "node prisma/startup.js",

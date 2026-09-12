@@ -1,7 +1,7 @@
 /* eslint-disable @typescript-eslint/no-require-imports */
 const assert = require("node:assert/strict");
 const { spawnSync } = require("node:child_process");
-const { cpSync, mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } = require("node:fs");
+const { cpSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } = require("node:fs");
 const os = require("node:os");
 const path = require("node:path");
 const { test } = require("node:test");
@@ -32,10 +32,10 @@ function fixture(t) {
   return {
     root, env,
     start: (expected) => run([path.join(root, "prisma/startup.js")], expected),
-    push: () => {
+    push: async () => {
       mkdirSync(path.join(root, "data"), { recursive: true });
-      writeFileSync(path.join(root, "data/dev.db"), "");
-      run([require.resolve("prisma/build/index.js"), "db", "push", "--skip-generate"]);
+      client ??= createClient({ url });
+      await client.executeMultiple(readFileSync(path.join(__dirname, "migrations/20260912000000_init/migration.sql"), "utf8"));
     },
     db: () => client ??= createClient({ url }),
   };
@@ -68,14 +68,14 @@ test("missing database is created, migrated and seeded; restart preserves edits"
 
 test("empty legacy db push database is baselined and seeded", async (t) => {
   const f = fixture(t);
-  f.push();
+  await f.push();
   assert.match(f.start(), /Database seeded/);
   assert.equal((await snapshot(f.db())).Settings.length, 1);
 });
 
 test("populated legacy database is baselined and pending migrations preserve data", async (t) => {
   const f = fixture(t);
-  f.push();
+  await f.push();
   await f.db().execute("INSERT INTO Period (dayType, `order`, name, startTime, endTime) VALUES ('REMOTE', 1, 'Existing', '09:00', '09:35')");
   const before = await snapshot(f.db());
   // An additional migration must be applied even when there is existing data.
@@ -84,14 +84,14 @@ test("populated legacy database is baselined and pending migrations preserve dat
   writeFileSync(path.join(migration, "migration.sql"), 'CREATE TABLE "StartupTest" ("id" INTEGER PRIMARY KEY);');
   assert.match(f.start(), /skipping seed/);
   assert.deepEqual(await snapshot(f.db()), before);
-  assert.equal((await f.db().execute("SELECT COUNT(*) AS count FROM _prisma_migrations WHERE finished_at IS NOT NULL")).rows[0].count, 2);
+  assert.equal((await f.db().execute("SELECT COUNT(*) AS count FROM _prisma_migrations WHERE finished_at IS NOT NULL")).rows[0].count, 3);
   await f.db().execute('SELECT * FROM "StartupTest"');
   assert.match(f.start(), /No pending migrations/);
 });
 
 test("schema mismatch fails without resetting existing data", async (t) => {
   const f = fixture(t);
-  f.push();
+  await f.push();
   await f.db().execute('ALTER TABLE "Period" ADD COLUMN "custom" TEXT');
   assert.match(f.start(1), /Existing database differs from the initial migration/);
   const columns = await f.db().execute('PRAGMA table_info("Period")');

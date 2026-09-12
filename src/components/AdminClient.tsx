@@ -4,7 +4,7 @@ import Link from "next/link";
 import { type FormEvent, useEffect, useMemo, useRef, useState } from "react";
 
 import { dayTypeLabel } from "@/lib/date-utils";
-import { type DayType, type TuesdayMode } from "@/lib/day-type";
+import { alternatingTuesday, isTuesdayDate, upcomingTuesdays, type ScheduleMode, type ScheduleDayType } from "@/lib/schedule";
 
 type Period = {
   id: number;
@@ -29,9 +29,10 @@ type SettingsShape = {
   autoDayTypeEnabled: boolean;
   onSiteDays: number[];
   remoteDays: number[];
-  tuesdayMode: TuesdayMode;
-  tuesdayOddWeekType: DayType;
-  tuesdayEvenWeekType: DayType;
+  scheduleMode: ScheduleMode | null;
+  tuesdayReferenceDate: string | null;
+  tuesdayReferenceType: ScheduleDayType;
+  today: string;
 };
 
 type Props = {
@@ -40,46 +41,6 @@ type Props = {
   onSitePeriods: Period[];
   remotePeriods: Period[];
   terms: TermItem[];
-};
-
-const toDateSafe = (value: string) => {
-  const d = new Date(value);
-  return Number.isNaN(d.getTime()) ? null : d;
-};
-
-const getRelevantTermStart = (terms: TermItem[], now: Date) => {
-  const parsed = terms
-    .map((t) => ({
-      ...t,
-      startDate: toDateSafe(t.startDate),
-      endDate: toDateSafe(t.endDate),
-    }))
-    .filter((t) => t.startDate && t.endDate) as Array<
-    TermItem & { startDate: Date; endDate: Date }
-  >;
-  if (!parsed.length) return null;
-  const sorted = [...parsed].sort(
-    (a, b) => a.startDate.getTime() - b.startDate.getTime(),
-  );
-  const active = sorted.find(
-    (term) => now >= term.startDate && now <= term.endDate,
-  );
-  if (active) return active.startDate;
-  const upcoming = sorted.find((term) => term.startDate > now);
-  if (upcoming) return upcoming.startDate;
-  return sorted[sorted.length - 1]?.startDate ?? null;
-};
-
-const weeksElapsedSince = (start: Date, now: Date) => {
-  const DAY_MS = 24 * 60 * 60 * 1000;
-  const startMid = new Date(
-    Date.UTC(start.getFullYear(), start.getMonth(), start.getDate()),
-  );
-  const nowMid = new Date(
-    Date.UTC(now.getFullYear(), now.getMonth(), now.getDate()),
-  );
-  const diff = nowMid.getTime() - startMid.getTime();
-  return Math.max(0, Math.floor(diff / (7 * DAY_MS)));
 };
 
 export const AdminClient = ({
@@ -100,20 +61,17 @@ export const AdminClient = ({
     managerName: settings.managerName,
   });
   const [currentDayType, setCurrentDayType] = useState(settings.currentDayType);
-  const [autoDayTypeEnabled, setAutoDayTypeEnabled] = useState(
-    settings.autoDayTypeEnabled,
+  const [scheduleMode, setScheduleMode] = useState<ScheduleMode>(
+    settings.scheduleMode ?? (settings.autoDayTypeEnabled ? "AUTO" : settings.currentDayType === "REMOTE" ? "REMOTE" : "ON_SITE"),
   );
-  const [autoDays, setAutoDays] = useState<Record<"ON_SITE" | "REMOTE", number[]>>({
-    ON_SITE: settings.onSiteDays,
-    REMOTE: settings.remoteDays,
+  const [autoDays, setAutoDays] = useState({
+    ON_SITE: [0, 1, 3, 4].filter((day) => !settings.remoteDays.includes(day) || settings.onSiteDays.includes(day)),
+    REMOTE: [0, 1, 3, 4].filter((day) => settings.remoteDays.includes(day) && !settings.onSiteDays.includes(day)),
   });
-  const [tuesdayMode, setTuesdayMode] = useState<TuesdayMode>(settings.tuesdayMode);
-  const [tuesdayOddWeekType, setTuesdayOddWeekType] = useState<DayType>(
-    settings.tuesdayOddWeekType,
-  );
-  const [tuesdayEvenWeekType, setTuesdayEvenWeekType] = useState<DayType>(
-    settings.tuesdayEvenWeekType,
-  );
+  const [tuesdayReferenceDate, setTuesdayReferenceDate] = useState(settings.tuesdayReferenceDate ?? "");
+  const [tuesdayReferenceType, setTuesdayReferenceType] = useState<ScheduleDayType>(settings.tuesdayReferenceType);
+  const [scheduleSaved, setScheduleSaved] = useState(Boolean(settings.scheduleMode));
+  const tuesdayDates = upcomingTuesdays(new Date(settings.today));
   const [editDayType, setEditDayType] = useState<"ON_SITE" | "REMOTE">(
     "ON_SITE",
   );
@@ -153,53 +111,7 @@ export const AdminClient = ({
     { value: 2, label: "الثلاثاء" },
     { value: 3, label: "الأربعاء" },
     { value: 4, label: "الخميس" },
-    { value: 5, label: "الجمعة" },
-    { value: 6, label: "السبت" },
   ];
-  const tuesdayModeOptions: { value: TuesdayMode; label: string }[] = [
-    { value: "MANUAL", label: "تعطيل التحكم التلقائي (استخدم التحديد اليدوي)" },
-    { value: "FIXED_ON_SITE", label: "ثابت: حضوري دائمًا" },
-    { value: "FIXED_REMOTE", label: "ثابت: عن بعد دائمًا" },
-    { value: "WEEKLY_ALTERNATE", label: "تبديل أسبوعي تلقائي" },
-    { value: "WEEK_NUMBER_BASED", label: "حسب رقم الأسبوع من بداية الترم (فردي/زوجي)" },
-    {
-      value: "TERM_WEEK_BASED",
-      label: "تبديل حسب عدد الأسابيع منذ بداية الترم الدراسي",
-    },
-  ];
-  const tuesdayModeResult = useMemo(() => {
-    const now = new Date();
-    if (tuesdayMode === "MANUAL") return null;
-    if (tuesdayMode === "FIXED_REMOTE") return "REMOTE";
-    if (tuesdayMode === "FIXED_ON_SITE") return "ON_SITE";
-    if (tuesdayMode === "WEEK_NUMBER_BASED") {
-      const termStart = getRelevantTermStart(terms, now);
-      if (!termStart) return null;
-      const weekNumber = weeksElapsedSince(termStart, now) + 1;
-      return weekNumber % 2 === 1 ? tuesdayOddWeekType : tuesdayEvenWeekType;
-    }
-    if (tuesdayMode === "WEEKLY_ALTERNATE") {
-      const weeks = weeksElapsedSince(new Date(Date.UTC(1970, 0, 5)), now);
-      return weeks % 2 === 0 ? "ON_SITE" : "REMOTE";
-    }
-    const termStart = getRelevantTermStart(terms, now);
-    if (!termStart) return null;
-    const weekNumber = weeksElapsedSince(termStart, now) + 1;
-    return weekNumber % 2 === 1 ? "ON_SITE" : "REMOTE";
-  }, [tuesdayMode, terms, tuesdayOddWeekType, tuesdayEvenWeekType]);
-  const tuesdayWeekNumber = useMemo(() => {
-    const now = new Date();
-    const termStart = getRelevantTermStart(terms, now);
-    if (!termStart) return null;
-    return weeksElapsedSince(termStart, now) + 1;
-  }, [terms]);
-  const tuesdayWeekParityLabel =
-    tuesdayWeekNumber === null
-      ? null
-      : tuesdayWeekNumber % 2 === 1
-        ? "فردي"
-        : "زوجي";
-
   const addTerm = () => {
     setTerms((prev) => {
       const lastEndRaw = prev[prev.length - 1]?.endDate;
@@ -274,40 +186,26 @@ export const AdminClient = ({
     setError(null);
     setMessage(null);
 
-    const res = await fetch("/api/admin/update-header", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(header),
-    });
-
-    setBusy(false);
-
-    if (res.ok) {
-      setMessage("تم تحديث بيانات الرأس");
-    } else {
-      setError("تعذر تحديث البيانات");
-    }
-  };
-
-  const saveDayType = async (value: "ON_SITE" | "REMOTE") => {
-    setCurrentDayType(value);
-    setBusy(true);
-    setMessage(null);
-    setError(null);
-
-    const res = await fetch("/api/admin/update-day-type", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ dayType: value }),
-    });
-
-    setBusy(false);
-
-    if (res.ok) {
-      setMessage("تم تحديث نوع اليوم");
+    try {
+      const res = await fetch("/api/admin/update-header", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(header),
+      });
+      if (res.status === 401) {
+        setIsAuthed(false);
+        setPassword("");
+        setError("جلسة المدير غير متاحة أو انتهت. سجّل الدخول مجددًا ثم أعد حفظ البيانات.");
+        return;
+      }
+      const payload = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(payload.error || "تعذر تحديث البيانات");
+      setMessage("تم تحديث بيانات المدرسة");
       broadcastUpdate();
-    } else {
-      setError("تعذر تغيير نوع اليوم");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "تعذر تحديث البيانات");
+    } finally {
+      setBusy(false);
     }
   };
 
@@ -315,43 +213,23 @@ export const AdminClient = ({
     setBusy(true);
     setMessage(null);
     setError(null);
-
-    const res = await fetch("/api/admin/update-auto-day-type", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        autoDayTypeEnabled,
-        onSiteDays: autoDays.ON_SITE,
-        remoteDays: autoDays.REMOTE,
-        tuesdayMode,
-        tuesdayOddWeekType,
-        tuesdayEvenWeekType,
-      }),
-    });
-
-    setBusy(false);
-
-    if (res.ok) {
+    try {
+      const res = await fetch("/api/admin/update-auto-day-type", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ scheduleMode, onSiteDays: autoDays.ON_SITE,
+          remoteDays: autoDays.REMOTE, tuesdayReferenceDate, tuesdayReferenceType }),
+      });
       const payload = await res.json().catch(() => ({}));
-      const appliedType =
-        payload?.appliedDayType ||
-        payload?.settings?.currentDayType ||
-        currentDayType;
-      if (payload?.settings?.tuesdayMode) {
-        setTuesdayMode(payload.settings.tuesdayMode);
-      }
-      if (payload?.settings?.tuesdayOddWeekType) {
-        setTuesdayOddWeekType(payload.settings.tuesdayOddWeekType);
-      }
-      if (payload?.settings?.tuesdayEvenWeekType) {
-        setTuesdayEvenWeekType(payload.settings.tuesdayEvenWeekType);
-      }
-      setCurrentDayType(appliedType);
-      setMessage("تم حفظ التبديل التلقائي");
+      if (!res.ok) throw new Error(payload.error || "تعذر حفظ نمط الدوام");
+      setCurrentDayType(payload.appliedDayType);
+      setScheduleSaved(true);
+      setMessage("تم حفظ نمط الدوام وتطبيقه");
       broadcastUpdate();
-    } else {
-      const payload = await res.json().catch(() => ({}));
-      setError(payload?.error || "تعذر حفظ التبديل التلقائي");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "تعذر حفظ نمط الدوام");
+    } finally {
+      setBusy(false);
     }
   };
 
@@ -501,19 +379,6 @@ export const AdminClient = ({
     setMessage("تم حذف الحصة، احفظ التغييرات للتأكيد.");
     setError(null);
     setToastVisible(true);
-  };
-
-  const toggleDaySelection = (type: "ON_SITE" | "REMOTE", day: number) => {
-    setAutoDays((prev) => {
-      const exists = prev[type].includes(day);
-      const nextList = exists
-        ? prev[type].filter((d) => d !== day)
-        : [...prev[type], day];
-      return {
-        ...prev,
-        [type]: nextList.sort((a, b) => a - b),
-      };
-    });
   };
 
   const changePassword = async () => {
@@ -885,218 +750,75 @@ export const AdminClient = ({
       <SectionDivider />
 
       <section className={`${panelClass} p-5 space-y-4`}>
-        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-          <div>
-            <div className="flex items-center gap-2">
-              <span className={titleAccent} />
-              <h2 className="text-lg font-semibold text-slate-900">
-                <span className={titleChip}>نوع اليوم</span>
-              </h2>
-            </div>
-            <p className="text-xs text-slate-500">تحويل فوري بين حضوري وعن بعد</p>
-          </div>
-          <span className="text-xs text-slate-500">الوضع الحالي: {dayTypeLabel(currentDayType)}</span>
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <h2 className="text-lg font-semibold text-slate-900"><span className={titleChip}>نمط الدوام</span></h2>
+          <span className="text-sm text-slate-600">الدوام المطبق الآن: {dayTypeLabel(currentDayType)}</span>
         </div>
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-          {(["ON_SITE", "REMOTE"] as const).map((type) => (
-            <button
-              key={type}
-              onClick={() => saveDayType(type)}
-              className={`rounded-xl px-4 py-3 text-sm font-semibold border transition text-center ${
-                currentDayType === type
-                  ? "bg-gradient-to-r from-indigo-600 to-violet-600 text-white border-transparent shadow-sm"
-                  : "bg-white text-slate-800 border-slate-200 hover:border-indigo-200 hover:text-indigo-700"
-              }`}
-            >
-              {dayTypeLabel(type)}
-            </button>
-          ))}
-        </div>
-      </section>
-
-      <SectionDivider />
-
-      <section className={`${panelClass} p-5 space-y-4`}>
-        <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
-          <div>
-            <div className="flex items-center gap-2">
-              <span className={titleAccent} />
-              <h2 className="text-lg font-semibold text-slate-900">
-                <span className={titleChip}>التبديل التلقائي حسب الأيام</span>
-              </h2>
-            </div>
-            <p className="text-xs text-slate-500">
-              اختر أيام كل نوع وسيتم تغيير نوع اليوم تلقائياً.
-            </p>
+        {!scheduleSaved && <p className="text-sm text-amber-800">الإعدادات السابقة مستمرة حتى تحفظ نمط الدوام الجديد.</p>}
+        <fieldset disabled={busy} className="space-y-4">
+          <legend className="sr-only">اختر نمط الدوام</legend>
+          <div className="grid gap-2 sm:grid-cols-3">
+            {([{ value: "ON_SITE", label: "حضوري دائمًا" }, { value: "REMOTE", label: "عن بُعد دائمًا" }, { value: "AUTO", label: "جدول تلقائي" }] as const).map((option) => (
+              <label key={option.value} className={`flex items-center gap-2 rounded-xl border p-3 cursor-pointer ${scheduleMode === option.value ? "border-indigo-500 bg-indigo-50 text-indigo-800" : "border-slate-200"}`}>
+                <input type="radio" name="scheduleMode" value={option.value} checked={scheduleMode === option.value} onChange={() => setScheduleMode(option.value)} />
+                {option.label}
+              </label>
+            ))}
           </div>
-          <div className="flex items-center gap-3">
-            <span className="text-sm text-slate-700">التبديل التلقائي</span>
-            <button
-              type="button"
-              onClick={() => setAutoDayTypeEnabled((prev) => !prev)}
-              className={`relative inline-flex h-8 w-16 items-center rounded-full border overflow-hidden transition ${
-                autoDayTypeEnabled
-                  ? "bg-emerald-500 border-emerald-500"
-                  : "bg-slate-200 border-slate-300"
-              }`}
-            >
-              <span
-                className={`absolute top-1 h-5 w-5 rounded-full bg-white shadow ring-1 ring-black/5 transition-all duration-200 ease-out ${
-                  autoDayTypeEnabled
-                    ? "left-auto right-1"
-                    : "left-1 right-auto"
-                }`}
-              />
-              <span className="sr-only">تفعيل التبديل التلقائي</span>
-            </button>
-            <button
-              onClick={saveAutoDayType}
-              disabled={busy}
-              className="rounded-lg bg-gradient-to-r from-indigo-600 via-violet-600 to-purple-600 text-white px-3 py-2 text-sm font-semibold shadow-sm hover:opacity-95 transition disabled:opacity-60 whitespace-nowrap shrink-0"
-            >
-              حفظ التبديل التلقائي
-            </button>
-          </div>
-        </div>
-
-        <div className="rounded-xl border border-indigo-100 bg-indigo-50/60 p-4 shadow-inner space-y-2">
-          <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
-            <div>
-              <p className="text-sm font-semibold text-slate-800">
-                تبديل يوم الثلاثاء
-              </p>
-              <p className="text-xs text-slate-600">
-                اختر آلية التبديل ليوم الثلاثاء مع التبديل التلقائي.
-              </p>
-            </div>
-            <select
-              className="rounded-lg border border-indigo-200 bg-white px-3 py-2 text-sm focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100 focus:outline-none disabled:bg-slate-50 disabled:text-slate-400"
-              value={tuesdayMode}
-              onChange={(e) => setTuesdayMode(e.target.value as TuesdayMode)}
-              disabled={!autoDayTypeEnabled}
-            >
-              {tuesdayModeOptions.map((option) => (
-                <option key={option.value} value={option.value}>
-                  {option.label}
-                </option>
-              ))}
-            </select>
-          </div>
-          {tuesdayMode === "WEEK_NUMBER_BASED" && (
-            <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
-              <div className="space-y-1">
-                <label className="text-xs text-slate-600">الأسبوع الفردي</label>
-                <select
-                  className="w-full rounded-lg border border-indigo-200 bg-white px-3 py-2 text-sm focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100 focus:outline-none disabled:bg-slate-50 disabled:text-slate-400"
-                  value={tuesdayOddWeekType}
-                  onChange={(e) =>
-                    setTuesdayOddWeekType(e.target.value as DayType)
-                  }
-                  disabled={!autoDayTypeEnabled}
-                >
-                  <option value="ON_SITE">حضوري</option>
-                  <option value="REMOTE">عن بُعد</option>
-                </select>
-              </div>
-              <div className="space-y-1">
-                <label className="text-xs text-slate-600">الأسبوع الزوجي</label>
-                <select
-                  className="w-full rounded-lg border border-indigo-200 bg-white px-3 py-2 text-sm focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100 focus:outline-none disabled:bg-slate-50 disabled:text-slate-400"
-                  value={tuesdayEvenWeekType}
-                  onChange={(e) =>
-                    setTuesdayEvenWeekType(e.target.value as DayType)
-                  }
-                  disabled={!autoDayTypeEnabled}
-                >
-                  <option value="ON_SITE">حضوري</option>
-                  <option value="REMOTE">عن بُعد</option>
-                </select>
+          {scheduleMode !== "AUTO" && <p className="text-sm text-slate-600">يُطبّق على جميع أيام الدوام.</p>}
+          {scheduleMode === "AUTO" && (
+            <div className="space-y-4">
+              <fieldset className="space-y-4">
+                <legend className="font-semibold text-slate-800 mb-3">إعدادات الجدول التلقائي</legend>
+                <div className="grid gap-3 sm:grid-cols-2">
+                  {dayOptions.filter((day) => day.value !== 2).map((day) => (
+                    <label key={day.value} className="flex items-center justify-between gap-3 rounded-lg border border-slate-200 p-3">
+                      {day.label}
+                      <select aria-label={`دوام ${day.label}`} className="rounded-lg border border-slate-300 bg-white p-2" value={autoDays.REMOTE.includes(day.value) ? "REMOTE" : "ON_SITE"} onChange={(event) => {
+                        const type = event.target.value;
+                        setAutoDays((prev) => ({
+                          ON_SITE: type === "ON_SITE" ? [...prev.ON_SITE.filter((d) => d !== day.value), day.value] : prev.ON_SITE.filter((d) => d !== day.value),
+                          REMOTE: type === "REMOTE" ? [...prev.REMOTE.filter((d) => d !== day.value), day.value] : prev.REMOTE.filter((d) => d !== day.value),
+                        }));
+                      }}>
+                        <option value="ON_SITE">حضوري</option><option value="REMOTE">عن بُعد</option>
+                      </select>
+                    </label>
+                  ))}
+                </div>
+                <div className="rounded-xl border border-indigo-100 bg-indigo-50/60 p-4 space-y-3">
+                  <p className="font-semibold text-slate-800">تناوب الثلاثاء أسبوعيًا</p>
+                  <p className="text-sm text-slate-600">اختر ثلاثاء معروفًا وحدد دوامه؛ الثلاثاء التالي يكون بالنوع الآخر. يستمر التناوب خلال الإجازات وبين الأترام بتوقيت الرياض.</p>
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    <label className="space-y-1">تاريخ الثلاثاء المرجعي (ميلادي)
+                      <input type="date" value={tuesdayReferenceDate} onChange={(e) => setTuesdayReferenceDate(e.target.value)} className="block w-full rounded-lg border border-slate-300 bg-white p-2" />
+                    </label>
+                    <label className="space-y-1">دوام الثلاثاء المرجعي
+                      <select value={tuesdayReferenceType} onChange={(e) => setTuesdayReferenceType(e.target.value as ScheduleDayType)} className="block w-full rounded-lg border border-slate-300 bg-white p-2">
+                        <option value="REMOTE">عن بُعد</option><option value="ON_SITE">حضوري</option>
+                      </select>
+                    </label>
+                  </div>
+                  {tuesdayReferenceDate && !isTuesdayDate(tuesdayReferenceDate) && <p role="alert" className="text-sm text-rose-700">التاريخ المختار يجب أن يوافق يوم الثلاثاء.</p>}
+                </div>
+              </fieldset>
+              <div className="space-y-2">
+                <p className="font-semibold text-slate-800">معاينة أيام الثلاثاء الأربعة القادمة حسب الاختيارات قبل الحفظ</p>
+                {!isTuesdayDate(tuesdayReferenceDate) ? <p className="text-sm text-slate-500">اختر تاريخ ثلاثاء صحيحًا لعرض المعاينة.</p> : (
+                  <ul className="grid gap-2 sm:grid-cols-2">
+                    {tuesdayDates.map((date) => {
+                      const type = alternatingTuesday(date, tuesdayReferenceDate, tuesdayReferenceType);
+                      return <li key={date} className={`rounded-lg border p-3 ${type === "REMOTE" ? "border-purple-200 bg-purple-50" : "border-emerald-200 bg-emerald-50"}`}><span dir="ltr">{date}</span> — {dayTypeLabel(type)}</li>;
+                    })}
+                  </ul>
+                )}
               </div>
             </div>
           )}
-          <div className="flex flex-wrap items-center gap-2 text-[11px] text-slate-700">
-            <span>يوم الثلاثاء الحالي:</span>
-            <span
-              className={`rounded-full px-3 py-1 font-semibold ${
-                tuesdayModeResult === "REMOTE"
-                  ? "bg-purple-50 text-purple-700 border border-purple-200"
-                  : tuesdayModeResult === "ON_SITE"
-                    ? "bg-emerald-50 text-emerald-700 border border-emerald-200"
-                    : "bg-slate-100 text-slate-600 border border-slate-200"
-              }`}
-            >
-              {tuesdayModeResult === "REMOTE"
-                ? "عن بُعد (حسب الاختيار)"
-                : tuesdayModeResult === "ON_SITE"
-                  ? "حضوري (حسب الاختيار)"
-                  : "يدوي حسب اختيار الأيام"}
-            </span>
-            {tuesdayMode === "WEEK_NUMBER_BASED" && tuesdayWeekNumber !== null && (
-              <span className="text-slate-600">
-                رقم الأسبوع الحالي: {tuesdayWeekNumber} ({tuesdayWeekParityLabel})
-              </span>
-            )}
-            {tuesdayMode === "WEEK_NUMBER_BASED" && tuesdayWeekNumber === null && (
-              <span className="text-slate-500">لا يمكن حساب رقم الأسبوع بدون أترام.</span>
-            )}
-            <span className="text-slate-500">
-              اختيار الثلاثاء هنا سيطبَّق عند التبديل التلقائي، ويمكنك تعطيله للعودة للاختيار اليدوي من الأزرار.
-            </span>
-          </div>
-          <p className="text-[11px] text-slate-600 leading-relaxed">
-            في وضع رقم الأسبوع: يعتمد الثلاثاء على رقم الأسبوع من بداية الترم الحالي،
-            والأسبوع الأول رقمه 1 (فردي). في وضع الأسابيع من بداية الترم: إذا كان
-            رقم الأسبوع فرديًا يكون الثلاثاء حضوري، وإذا كان زوجيًا يكون عن بُعد.
-          </p>
-        </div>
-
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          {(["ON_SITE", "REMOTE"] as const).map((type) => (
-            <div
-              key={type}
-              className="rounded-xl border border-slate-200 bg-white/80 p-4 space-y-3 shadow-inner"
-            >
-              <div className="flex items-center justify-between">
-                <p className="text-sm font-semibold text-slate-800">
-                  أيام {dayTypeLabel(type)}
-                </p>
-                <span className="text-[11px] text-slate-500">
-                  {autoDays[type].length} يوم/أيام
-                </span>
-              </div>
-              <div className="flex flex-wrap gap-2">
-                {dayOptions.map((day) => {
-                  const isTuesday = day.value === 2;
-                  const modeHighlightsThisType =
-                    isTuesday && tuesdayModeResult === type;
-                  const active =
-                    tuesdayModeResult === null && isTuesday
-                      ? autoDays[type].includes(day.value)
-                      : modeHighlightsThisType || autoDays[type].includes(day.value);
-                  return (
-                    <button
-                      type="button"
-                      key={`${type}-${day.value}`}
-                      onClick={() => toggleDaySelection(type, day.value)}
-                      disabled={!autoDayTypeEnabled}
-                      className={`rounded-full border px-3 py-1.5 text-sm transition ${
-                        active
-                          ? "bg-emerald-500 text-white border-emerald-500 shadow-sm hover:bg-emerald-600"
-                          : "bg-white text-slate-700 border-slate-200 hover:border-emerald-200 hover:text-emerald-700 disabled:border-slate-200 disabled:text-slate-400"
-                      } ${modeHighlightsThisType ? "ring-2 ring-indigo-200" : ""}`}
-                    >
-                      {day.label}
-                      {modeHighlightsThisType ? " (طبق اختيار الثلاثاء)" : ""}
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-          ))}
-        </div>
-        <p className="text-xs text-slate-500">
-          في حال التعارض بين النوعين لنفس اليوم سيُحتفظ بآخر اختيار يدوي.
-        </p>
+          <button onClick={saveAutoDayType} disabled={busy || (scheduleMode === "AUTO" && !isTuesdayDate(tuesdayReferenceDate))} className="rounded-lg bg-indigo-600 text-white px-4 py-2 font-semibold disabled:opacity-50">
+            {busy ? "جارٍ الحفظ…" : "حفظ نمط الدوام"}
+          </button>
+        </fieldset>
       </section>
 
       <SectionDivider />

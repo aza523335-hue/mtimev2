@@ -5,13 +5,8 @@ import {
   ADMIN_COOKIE_NAME,
   isAdminAuthenticated,
 } from "@/lib/auth";
-import {
-  applyAutoDayType,
-  normalizeDayType,
-  normalizeDayList,
-  normalizeTuesdayMode,
-  serializeDaysField,
-} from "@/lib/day-type";
+import { applyAutoDayType, serializeDaysField } from "@/lib/day-type";
+import { isTuesdayDate } from "@/lib/schedule";
 import { prisma } from "@/lib/prisma";
 
 export const dynamic = "force-dynamic";
@@ -31,22 +26,40 @@ export async function POST(request: Request) {
     }
 
     const body = await request.json().catch(() => null);
-    const autoDayTypeEnabled = Boolean(body?.autoDayTypeEnabled);
-    const onSiteDays = normalizeDayList(body?.onSiteDays);
-    const remoteDays = normalizeDayList(body?.remoteDays);
-    const tuesdayMode = normalizeTuesdayMode(body?.tuesdayMode);
-    const tuesdayOddWeekType = normalizeDayType(body?.tuesdayOddWeekType);
-    const tuesdayEvenWeekType = normalizeDayType(body?.tuesdayEvenWeekType);
-
+    const { scheduleMode, tuesdayReferenceDate, tuesdayReferenceType, onSiteDays, remoteDays } = body ?? {};
+    if (!["ON_SITE", "REMOTE", "AUTO"].includes(scheduleMode)) {
+      return NextResponse.json({ error: "اختر نمط دوام صالحًا." }, { status: 400 });
+    }
+    // Fixed modes keep the saved automatic schedule, including its reference date.
+    if (scheduleMode !== "AUTO") {
+      const updated = await prisma.settings.update({
+        where: { id: settings.id },
+        data: { scheduleMode, currentDayType: scheduleMode, autoDayTypeEnabled: false },
+      });
+      return NextResponse.json({ success: true, appliedDayType: updated.currentDayType });
+    }
+    const validDays = (days: unknown): days is number[] => Array.isArray(days) &&
+      days.every((day) => Number.isInteger(day) && day >= 0 && day <= 4 && day !== 2) &&
+      new Set(days).size === days.length;
+    if (!validDays(onSiteDays) || !validDays(remoteDays) ||
+        onSiteDays.some((day) => remoteDays.includes(day)) || onSiteDays.length + remoteDays.length !== 4) {
+      return NextResponse.json({ error: "حدد نوع الدوام لأيام الأحد والاثنين والأربعاء والخميس، لكل يوم مرة واحدة." }, { status: 400 });
+    }
+    if ((scheduleMode === "AUTO" || tuesdayReferenceDate) && !isTuesdayDate(tuesdayReferenceDate)) {
+      return NextResponse.json({ error: "اختر تاريخًا صحيحًا يوافق يوم الثلاثاء." }, { status: 400 });
+    }
+    if (!["ON_SITE", "REMOTE"].includes(tuesdayReferenceType)) {
+      return NextResponse.json({ error: "حدد نوع دوام الثلاثاء المرجعي." }, { status: 400 });
+    }
     const updated = await prisma.settings.update({
       where: { id: settings.id },
       data: {
-        autoDayTypeEnabled,
+        scheduleMode,
+        autoDayTypeEnabled: scheduleMode === "AUTO",
         onSiteDays: serializeDaysField(onSiteDays),
         remoteDays: serializeDaysField(remoteDays),
-        tuesdayMode,
-        tuesdayOddWeekType,
-        tuesdayEvenWeekType,
+        tuesdayReferenceDate: tuesdayReferenceDate || null,
+        tuesdayReferenceType,
       },
     });
 

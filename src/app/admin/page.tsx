@@ -4,8 +4,6 @@ import { AdminClient } from "@/components/AdminClient";
 import { ADMIN_COOKIE_NAME, isAdminAuthenticated } from "@/lib/auth";
 import {
   applyAutoDayType,
-  normalizeDayType,
-  normalizeTuesdayMode,
   parseDaysField,
 } from "@/lib/day-type";
 import { prisma } from "@/lib/prisma";
@@ -54,9 +52,10 @@ export default async function AdminPage() {
     autoDayTypeEnabled: settings.autoDayTypeEnabled,
     onSiteDays: parseDaysField(settings.onSiteDays),
     remoteDays: parseDaysField(settings.remoteDays),
-    tuesdayMode: normalizeTuesdayMode(settings.tuesdayMode),
-    tuesdayOddWeekType: normalizeDayType(settings.tuesdayOddWeekType),
-    tuesdayEvenWeekType: normalizeDayType(settings.tuesdayEvenWeekType),
+    scheduleMode: settings.scheduleMode as "ON_SITE" | "REMOTE" | "AUTO" | null,
+    tuesdayReferenceDate: settings.tuesdayReferenceDate,
+    tuesdayReferenceType: settings.tuesdayReferenceType as "ON_SITE" | "REMOTE",
+    today: now.toISOString(),
   } as const;
 
   return (

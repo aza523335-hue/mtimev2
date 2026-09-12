@@ -29,7 +29,7 @@ export async function POST(request: Request) {
 
   const updated = await prisma.settings.update({
     where: { id: settings!.id },
-    data: { currentDayType: dayType },
+    data: { currentDayType: dayType, scheduleMode: dayType, autoDayTypeEnabled: false },
   });
 
   return NextResponse.json({ success: true, settings: updated });

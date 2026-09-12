@@ -1,5 +1,7 @@
 import type { Settings, Term } from "@prisma/client";
 
+import { resolveSchedule } from "./schedule";
+
 import { prisma } from "./prisma";
 
 export type TuesdayMode =
@@ -173,6 +175,11 @@ export const applyAutoDayType = async (
   options?: { terms?: Term[] },
 ) => {
   if (!settings) return null;
+  if (settings.scheduleMode) {
+    const desiredType = resolveSchedule(settings, now);
+    if (desiredType === settings.currentDayType) return settings;
+    return prisma.settings.update({ where: { id: settings.id }, data: { currentDayType: desiredType } });
+  }
   if (!settings.autoDayTypeEnabled) return settings;
 
   // احسب اليوم بالتوقيت المحلي للرياض لضمان دقة اليوم الفعلي

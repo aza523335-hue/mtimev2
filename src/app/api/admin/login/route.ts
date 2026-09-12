@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 
 import {
   ADMIN_COOKIE_NAME,
+  adminCookieOptions,
   createAdminCookie,
   hashPassword,
 } from "@/lib/auth";
@@ -60,13 +61,7 @@ export async function POST(request: Request) {
 
   const response = NextResponse.json({ success: true });
 
-  response.cookies.set(ADMIN_COOKIE_NAME, createAdminCookie(settings), {
-    httpOnly: true,
-    sameSite: "lax",
-    secure: process.env.NODE_ENV === "production",
-    path: "/",
-    maxAge: 60 * 60 * 6,
-  });
+  response.cookies.set(ADMIN_COOKIE_NAME, createAdminCookie(settings), adminCookieOptions(request));
 
   return response;
 }

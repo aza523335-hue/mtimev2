@@ -9,6 +9,9 @@ datasource db {
 
 model Settings {
   id                Int      @id @default(autoincrement())
+  scheduleMode      String?
+  tuesdayReferenceDate String?
+  tuesdayReferenceType String @default("REMOTE")
   currentDayType    String
   autoDayTypeEnabled Boolean  @default(false)
   onSiteDays        String   @default("")
