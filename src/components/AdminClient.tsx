@@ -4,6 +4,7 @@ import Link from "next/link";
 import { DayFirstDateInput } from "./DayFirstDateInput";
 import { type FormEvent, useEffect, useMemo, useRef, useState } from "react";
 
+import { formatISODate } from "@/lib/date-format";
 import { dayTypeLabel } from "@/lib/date-utils";
 import { alternatingTuesday, isTuesdayDate, upcomingTuesdays, type ScheduleMode, type ScheduleDayType } from "@/lib/schedule";
 
@@ -718,17 +719,11 @@ export const AdminClient = ({
                     value={term.startDate}
                     onChange={(value) => updateTermField(index, "startDate", value)}
                   />
-                  <div className="space-y-1">
-                    <label className="text-xs text-slate-500">نهاية الترم</label>
-                    <input
-                      type="date"
-                      value={term.endDate}
-                      onChange={(e) =>
-                        updateTermField(index, "endDate", e.target.value)
-                      }
-                      className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:border-slate-900 focus:ring-2 focus:ring-slate-200 focus:outline-none"
-                    />
-                  </div>
+                  <DayFirstDateInput
+                    label="نهاية الترم"
+                    value={term.endDate}
+                    onChange={(value) => updateTermField(index, "endDate", value)}
+                  />
                 </div>
               </div>
             );
@@ -785,9 +780,11 @@ export const AdminClient = ({
                   <p className="font-semibold text-slate-800">تناوب الثلاثاء أسبوعيًا</p>
                   <p className="text-sm text-slate-600">اختر ثلاثاء معروفًا وحدد دوامه؛ الثلاثاء التالي يكون بالنوع الآخر. يستمر التناوب خلال الإجازات وبين الأترام بتوقيت الرياض.</p>
                   <div className="grid gap-3 sm:grid-cols-2">
-                    <label className="space-y-1">تاريخ الثلاثاء المرجعي (ميلادي)
-                      <input type="date" value={tuesdayReferenceDate} onChange={(e) => setTuesdayReferenceDate(e.target.value)} className="block w-full rounded-lg border border-slate-300 bg-white p-2" />
-                    </label>
+                    <DayFirstDateInput
+                      label="تاريخ الثلاثاء المرجعي (ميلادي)"
+                      value={tuesdayReferenceDate}
+                      onChange={setTuesdayReferenceDate}
+                    />
                     <label className="space-y-1">دوام الثلاثاء المرجعي
                       <select value={tuesdayReferenceType} onChange={(e) => setTuesdayReferenceType(e.target.value as ScheduleDayType)} className="block w-full rounded-lg border border-slate-300 bg-white p-2">
                         <option value="REMOTE">عن بُعد</option><option value="ON_SITE">حضوري</option>
@@ -803,7 +800,7 @@ export const AdminClient = ({
                   <ul className="grid gap-2 sm:grid-cols-2">
                     {tuesdayDates.map((date) => {
                       const type = alternatingTuesday(date, tuesdayReferenceDate, tuesdayReferenceType);
-                      return <li key={date} className={`rounded-lg border p-3 ${type === "REMOTE" ? "border-purple-200 bg-purple-50" : "border-emerald-200 bg-emerald-50"}`}><span dir="ltr">{date}</span> — {dayTypeLabel(type)}</li>;
+                      return <li key={date} className={`rounded-lg border p-3 ${type === "REMOTE" ? "border-purple-200 bg-purple-50" : "border-emerald-200 bg-emerald-50"}`}><span dir="ltr">{formatISODate(date)}</span> — {dayTypeLabel(type)}</li>;
                     })}
                   </ul>
                 )}

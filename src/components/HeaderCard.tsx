@@ -16,12 +16,12 @@ export const HeaderCard = ({
       {schoolName}
     </h1>
     <h2 className="text-md text-white/90">{managerName}</h2>
-    <div className="text-sm flex justify-center gap-4 font-medium">
+    <div className="text-sm flex flex-wrap justify-center gap-4 font-medium">
       <span className="px-3 py-1 rounded-full bg-white/15 backdrop-blur-sm">
-        {gregorianDate}
+        <bdi dir="ltr">{gregorianDate}</bdi> م
       </span>
       <span className="px-3 py-1 rounded-full bg-white/15 backdrop-blur-sm">
-        {hijriDate}
+        <bdi dir="ltr">{hijriDate}</bdi> هـ
       </span>
     </div>
   </div>

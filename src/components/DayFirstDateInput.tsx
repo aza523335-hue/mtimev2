@@ -2,7 +2,7 @@
 
 import { useId, useRef, useState } from "react";
 
-const displayDate = (value: string) => value ? value.split("-").reverse().join("/") : "";
+import { formatISODate as displayDate } from "@/lib/date-format";
 
 const parseDate = (value: string) => {
   const normalized = value.replace(/[٠-٩]/g, (digit) => String("٠١٢٣٤٥٦٧٨٩".indexOf(digit)))
