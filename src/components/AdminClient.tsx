@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { DayFirstDateInput } from "./DayFirstDateInput";
 import { type FormEvent, useEffect, useMemo, useRef, useState } from "react";
 
 import { dayTypeLabel } from "@/lib/date-utils";
@@ -712,17 +713,11 @@ export const AdminClient = ({
                       placeholder="مثال: الترم الأول"
                     />
                   </div>
-                  <div className="space-y-1">
-                    <label className="text-xs text-slate-500">بداية الترم</label>
-                    <input
-                      type="date"
-                      value={term.startDate}
-                      onChange={(e) =>
-                        updateTermField(index, "startDate", e.target.value)
-                      }
-                      className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:border-slate-900 focus:ring-2 focus:ring-slate-200 focus:outline-none"
-                    />
-                  </div>
+                  <DayFirstDateInput
+                    label="بداية الترم"
+                    value={term.startDate}
+                    onChange={(value) => updateTermField(index, "startDate", value)}
+                  />
                   <div className="space-y-1">
                     <label className="text-xs text-slate-500">نهاية الترم</label>
                     <input

@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Cairo, Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 
@@ -21,8 +21,12 @@ const cairo = Cairo({
 
 export const metadata: Metadata = {
   title: "جدول الحصص",
+  applicationName: "جدول الحصص",
+  appleWebApp: { capable: true, title: "جدول الحصص", statusBarStyle: "default" },
   description: "لوحة لعرض جدول الحصص اليومي وإدارته",
 };
+
+export const viewport: Viewport = { themeColor: "#0066df" };
 
 export default function RootLayout({
   children,
