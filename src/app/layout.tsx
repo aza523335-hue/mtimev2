@@ -20,10 +20,10 @@ const cairo = Cairo({
 });
 
 export const metadata: Metadata = {
-  title: "جدول الحصص",
-  applicationName: "جدول الحصص",
-  appleWebApp: { capable: true, title: "جدول الحصص", statusBarStyle: "default" },
-  description: "لوحة لعرض جدول الحصص اليومي وإدارته",
+  title: "مؤقت الحصص",
+  applicationName: "مؤقت الحصص",
+  appleWebApp: { capable: true, title: "مؤقت الحصص", statusBarStyle: "default" },
+  description: "مؤقت لمتابعة الحصص اليومية وإدارة مواعيدها",
 };
 
 export const viewport: Viewport = { themeColor: "#0066df" };

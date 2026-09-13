@@ -40,7 +40,7 @@ export default async function Home() {
     <main className="w-full max-w-full px-4 py-8 space-y-6 lg:px-10">
       <header className="flex items-center justify-between">
         <div>
-          <p className="text-sm text-slate-500">جدول الحصص اليومية</p>
+          <p className="text-sm text-slate-500">مؤقت الحصص</p>
           <h1 className="text-2xl font-bold text-slate-800">الجدول الزمني</h1>
         </div>
         <div className="flex items-center gap-3 text-xs text-slate-500">
