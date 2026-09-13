@@ -21,19 +21,31 @@ export function DayFirstDateInput({ value, onChange, label }: {
 }) {
   const id = useId();
   const picker = useRef<HTMLInputElement>(null);
-  const input = useRef<HTMLInputElement>(null);
+  const [showNativePicker, setShowNativePicker] = useState(false);
   const [draft, setDraft] = useState({ source: value, text: displayDate(value) });
   const text = draft.source === value ? draft.text : displayDate(value);
   const invalid = text.length > 0 && !parseDate(text);
 
+  const openPicker = () => {
+    try {
+      if (picker.current?.showPicker) {
+        picker.current.showPicker();
+        return;
+      }
+    } catch {
+      // Keep a visible native date control available when showPicker is blocked.
+    }
+    setShowNativePicker(true);
+  };
+
   return (
     <div className="space-y-1">
-      <label htmlFor={id} className="text-xs text-slate-500">{label} (يوم/شهر/سنة)</label>
-      <div className="flex items-center gap-2">
+      <label htmlFor={id} className="text-xs text-slate-500">{label}</label>
+      <div className="relative">
         <input
-          ref={input}
           id={id}
           type="text"
+          onClick={openPicker}
           dir="ltr"
           placeholder="DD/MM/YYYY"
           maxLength={10}
@@ -45,23 +57,36 @@ export function DayFirstDateInput({ value, onChange, label }: {
             setDraft({ source: next, text: event.target.value });
             onChange(next);
           }}
-          className="w-full min-w-0 rounded-lg border border-slate-200 px-3 py-2 text-sm focus:border-slate-900 focus:ring-2 focus:ring-slate-200 focus:outline-none"
+          className="w-full min-w-0 rounded-lg border border-slate-200 pl-3 pr-12 py-2 text-sm focus:border-slate-900 focus:ring-2 focus:ring-slate-200 focus:outline-none"
         />
-        <button type="button" aria-label={`اختيار ${label} من التقويم`}
-          onClick={() => {
-            try {
-              if (picker.current?.showPicker) picker.current.showPicker();
-              else input.current?.focus();
-            } catch { input.current?.focus(); }
-          }}
-          className="rounded-lg border border-slate-200 px-3 py-2 text-sm hover:bg-slate-50 focus-visible:outline-2 focus-visible:outline-indigo-600">تقويم</button>
-        <input ref={picker} type="date" tabIndex={-1} aria-hidden="true" className="sr-only" value={value}
-          onChange={(event) => {
-            const next = event.target.value;
-            setDraft({ source: next, text: displayDate(next) });
-            onChange(next);
-          }} />
+        <button
+          type="button"
+          aria-label={`اختيار ${label} من التقويم`}
+          title="اختيار التاريخ"
+          onClick={openPicker}
+          className="absolute right-1 top-1 rounded-md p-1.5 text-slate-600 hover:bg-slate-100 focus-visible:outline-2 focus-visible:outline-indigo-600"
+        >
+          <svg aria-hidden="true" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+            <rect x="3" y="5" width="18" height="16" rx="2" />
+            <path d="M16 3v4M8 3v4M3 11h18M8 15h2M14 15h2" />
+          </svg>
+        </button>
       </div>
+      <input
+        ref={picker}
+        type="date"
+        aria-label={`اختيار ${label} من التقويم`}
+        tabIndex={showNativePicker ? 0 : -1}
+        aria-hidden={!showNativePicker}
+        className={showNativePicker ? "w-full rounded-lg border border-slate-200 px-3 py-2 text-sm" : "sr-only"}
+        value={value}
+        onChange={(event) => {
+          const next = event.target.value;
+          setDraft({ source: next, text: displayDate(next) });
+          onChange(next);
+          setShowNativePicker(false);
+        }}
+      />
       {invalid && <p id={`${id}-error`} className="text-xs text-rose-700">أدخل تاريخًا صحيحًا بصيغة يوم/شهر/سنة، مثل 13/09/2026.</p>}
     </div>
   );
