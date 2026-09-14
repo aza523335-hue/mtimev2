@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 
 import { dayTypeLabel, parseTimeInTimeZone } from "@/lib/date-utils";
 import { type TermStatus } from "@/lib/terms";
@@ -80,12 +80,6 @@ export const HomeClient = ({ initialData }: Props) => {
   const [now, setNow] = useState(() => new Date(initialData.nowIso));
   const [error, setError] = useState<string | null>(null);
   const [showCompleted, setShowCompleted] = useState(false);
-  const [soundEnabled, setSoundEnabled] = useState(false);
-  const [soundUnlocked, setSoundUnlocked] = useState(false);
-  const [soundHydrated, setSoundHydrated] = useState(false);
-  const audioContextRef = useRef<AudioContext | null>(null);
-  const lastPeriodRef = useRef<{ id: number | null; status: "idle" | "current" } | null>(null);
-
   const fetchLatest = useCallback(async () => {
     try {
       const res = await fetch("/api/periods", { cache: "no-store" });
@@ -129,188 +123,6 @@ export const HomeClient = ({ initialData }: Props) => {
       channel.close();
     };
   }, [fetchLatest]);
-
-  const ensureAudioContext = useCallback(() => {
-    if (typeof window === "undefined" || !soundUnlocked) return null;
-    const AudioCtor =
-      window.AudioContext ||
-      (window as typeof window & { webkitAudioContext?: typeof AudioContext })
-        .webkitAudioContext;
-
-    if (!AudioCtor) return null;
-
-    if (!audioContextRef.current) {
-      audioContextRef.current = new AudioCtor();
-    }
-
-    if (audioContextRef.current.state === "suspended") {
-      audioContextRef.current.resume().catch(() => undefined);
-    }
-
-    return audioContextRef.current;
-  }, [soundUnlocked]);
-
-  const unlockAudioContext = useCallback(() => {
-    if (typeof window === "undefined") return null;
-    const AudioCtor =
-      window.AudioContext ||
-      (window as typeof window & { webkitAudioContext?: typeof AudioContext })
-        .webkitAudioContext;
-
-    if (!AudioCtor) return null;
-
-    if (!audioContextRef.current) {
-      audioContextRef.current = new AudioCtor();
-    }
-
-    if (audioContextRef.current.state === "suspended") {
-      audioContextRef.current.resume().catch(() => undefined);
-    }
-
-    if (!soundUnlocked) {
-      setSoundUnlocked(true);
-    }
-
-    return audioContextRef.current;
-  }, [soundUnlocked]);
-
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    setSoundEnabled(true);
-    setSoundHydrated(true);
-  }, []);
-
-  useEffect(() => {
-    if (!soundEnabled || soundUnlocked || typeof window === "undefined") return;
-
-    const handleFirstGesture = () => {
-      unlockAudioContext();
-    };
-
-    window.addEventListener("pointerdown", handleFirstGesture, { once: true });
-    window.addEventListener("keydown", handleFirstGesture, { once: true });
-
-    return () => {
-      window.removeEventListener("pointerdown", handleFirstGesture);
-      window.removeEventListener("keydown", handleFirstGesture);
-    };
-  }, [soundEnabled, soundUnlocked, unlockAudioContext]);
-
-  const playTone = useCallback(
-    (
-      frequency: number,
-      durationMs: number,
-      offsetSeconds = 0,
-      volume = 0.4,
-      type: OscillatorType = "sine",
-    ) => {
-      const ctx = ensureAudioContext();
-      if (!ctx) return;
-
-      const oscillator = ctx.createOscillator();
-      const gainNode = ctx.createGain();
-
-      oscillator.type = type;
-      oscillator.frequency.setValueAtTime(
-        frequency,
-        ctx.currentTime + offsetSeconds,
-      );
-
-      const startAt = ctx.currentTime + offsetSeconds;
-      const endAt = startAt + durationMs / 1000;
-
-      const level = Math.min(Math.max(volume, 0.01), 1);
-      gainNode.gain.setValueAtTime(level, startAt);
-      gainNode.gain.exponentialRampToValueAtTime(0.0001, endAt);
-
-      oscillator.connect(gainNode);
-      gainNode.connect(ctx.destination);
-
-      oscillator.start(startAt);
-      oscillator.stop(endAt);
-    },
-    [ensureAudioContext],
-  );
-
-  const playStartSound = useCallback(() => {
-    // نغمة جرس تقليدية لبداية الحصة
-    playTone(1200, 620, 0, 0.78, "sine"); // ضربة الجرس
-    playTone(900, 680, 0.04, 0.68, "triangle"); // ارتداد خفيف
-    playTone(600, 540, 0.12, 0.5, "sine"); // ذيل الجرس
-  }, [playTone]);
-
-  const playEndSound = useCallback(() => {
-    // نغمة نهاية مختلفة وواضحة (نزول حاد) عن بداية الحصة
-    playTone(520, 520, 0, 0.7, "square"); // نبضة منخفضة
-    playTone(400, 480, 0.1, 0.6, "triangle"); // نزول أوضح
-    playTone(300, 360, 0.18, 0.5, "sine"); // تذييل عميق
-  }, [playTone]);
-
-  useEffect(() => {
-    if (!soundHydrated || typeof window === "undefined") return;
-    window.localStorage.setItem(
-      "period-sound-enabled",
-      soundEnabled ? "true" : "false",
-    );
-  }, [soundEnabled, soundHydrated]);
-
-  useEffect(() => {
-    if (!soundEnabled) return;
-
-    const normalized = normalizePeriods(now, data.periods);
-    const active = normalized.find(
-      (period) => now >= period.start && now < period.end,
-    );
-
-    const prev = lastPeriodRef.current;
-    const prevPeriod = prev?.id
-      ? normalized.find((period) => period.id === prev.id)
-      : null;
-    const timeClose = (a: Date, b: Date) => Math.abs(a.getTime() - b.getTime()) <= 1000;
-
-    if (!prev) {
-      lastPeriodRef.current = {
-        id: active?.id ?? null,
-        status: active ? "current" : "idle",
-      };
-      return;
-    }
-
-    if (prev.status === "current" && (!active || active.id !== prev.id)) {
-      const sameTime =
-        prevPeriod &&
-        ((active && timeClose(prevPeriod.end, active.start)) ||
-          timeClose(prevPeriod.end, prevPeriod.start));
-      if (sameTime) {
-        playStartSound();
-      } else {
-        playEndSound();
-      }
-    }
-
-    if (active && prev.id !== active.id) {
-      playStartSound();
-    }
-
-    lastPeriodRef.current = {
-      id: active?.id ?? null,
-      status: active ? "current" : "idle",
-    };
-  }, [now, data.periods, soundEnabled, playEndSound, playStartSound]);
-
-  useEffect(() => {
-    if (!soundEnabled) return;
-    const normalized = normalizePeriods(new Date(), data.periods);
-    const active = normalized.find((period) => {
-      const current = new Date();
-      return current >= period.start && current < period.end;
-    });
-    lastPeriodRef.current = {
-      id: active?.id ?? null,
-      status: active ? "current" : "idle",
-    };
-  }, [soundEnabled, data.periods]);
 
   const dayBounds = (() => {
     if (!data.periods.length) return null;
@@ -469,70 +281,48 @@ export const HomeClient = ({ initialData }: Props) => {
             </div>
           ) : null}
 
-          <div className="border-slate-200 [&:not(:first-child)]:border-t [&:not(:first-child)]:pt-2 sm:[&:not(:first-child)]:pt-4 sm:rounded-xl sm:bg-indigo-50/70 sm:border sm:border-indigo-100 sm:p-4 space-y-1 sm:space-y-3">
-            <div className="flex flex-wrap items-center justify-between gap-2 sm:gap-3">
-              <span className="px-2.5 py-1 sm:px-4 sm:py-2 rounded-lg sm:rounded-xl bg-indigo-600 text-white text-sm lg:text-base font-bold shadow">
-                {dayTypeLabel(data.dayType)}
+          <div className="grid grid-cols-[auto_minmax(0,1fr)] items-center gap-x-3 gap-y-2 border-slate-200 [&:not(:first-child)]:border-t [&:not(:first-child)]:pt-2 sm:[&:not(:first-child)]:pt-4 sm:gap-x-4 sm:gap-y-3 sm:rounded-xl sm:bg-indigo-50/70 sm:border sm:border-indigo-100 sm:p-4">
+            <div className="col-span-2 flex items-baseline justify-center gap-2 text-slate-800">
+              <span className="text-[10px] text-slate-500 sm:text-xs">الآن</span>
+              <span className="whitespace-nowrap text-base font-bold tabular-nums text-slate-900 sm:text-lg lg:text-xl">
+                {new Intl.DateTimeFormat("ar-EG", {
+                  hour: "2-digit",
+                  minute: "2-digit",
+                  second: "2-digit",
+                  hour12: true,
+                  timeZone: "Asia/Riyadh",
+                }).format(now)}
               </span>
-              <button
-                type="button"
-                onClick={() => {
-                  setSoundEnabled((prev) => !prev);
-                  unlockAudioContext();
-                }}
-                className={`flex min-h-11 items-center gap-1.5 sm:gap-2 rounded-full border px-2.5 sm:px-3 py-2 text-xs font-semibold transition shadow-sm focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600 ${soundEnabled ? "bg-emerald-50 border-emerald-200 text-emerald-800" : "bg-white border-slate-200 text-slate-600"}`}
-                aria-label={`التنبيه الصوتي للحصص: ${soundEnabled ? "مفعّل" : "متوقف"}`}
-                aria-pressed={soundEnabled}
-              >
-                <span
-                  className={`h-2.5 w-2.5 rounded-full ${soundEnabled ? "bg-emerald-500" : "bg-slate-300"}`}
-                  aria-hidden
-                />
-                <span className="sm:hidden">التنبيه</span>
-                <span className="hidden sm:inline">تنبيه صوتي للحصص</span>
-                <span className="text-[11px] font-normal">
-                  {soundEnabled ? "مُفعّل" : "متوقف"}
-                </span>
-              </button>
             </div>
 
+            <span className="whitespace-nowrap rounded-lg bg-indigo-600 px-2.5 py-1 text-sm font-bold text-white shadow sm:rounded-xl sm:px-4 sm:py-2 lg:text-base">
+              {dayTypeLabel(data.dayType)}
+            </span>
+
             {dayBounds && (
-              <div className="w-full space-y-1">
-                <div className="grid grid-cols-[1fr_auto] sm:grid-cols-3 justify-items-start sm:justify-items-stretch items-center gap-2 text-[11px] sm:text-xs lg:text-sm font-semibold text-slate-700">
-                  <span
-                    className={`hidden sm:inline text-[11px] lg:text-xs whitespace-nowrap ${dayBounds.ended ? "text-red-600" : "text-slate-500"}`}
-                  >
+              <div className="min-w-0 space-y-1 sm:space-y-2">
+                <div className="flex flex-wrap items-center justify-between gap-x-2 gap-y-1 text-[11px] font-semibold sm:text-xs lg:text-sm">
+                  <span className={dayBounds.ended ? "text-emerald-700" : "text-slate-500"}>
                     {dayBounds.ended ? "انتهى اليوم الدراسي" : "اليوم الدراسي"}
                   </span>
-                  <div className="text-right sm:text-center text-slate-800 whitespace-nowrap">
-                    <span className="text-[10px] sm:text-xs text-slate-500 mr-1">
-                      الآن
-                    </span>
-                    <span className="font-bold text-base sm:text-lg lg:text-xl text-slate-900">
-                      {new Intl.DateTimeFormat("ar-EG", {
-                        hour: "2-digit",
-                        minute: "2-digit",
-                        second: "2-digit",
-                        hour12: true,
-                        timeZone: "Asia/Riyadh",
-                      }).format(now)}
-                    </span>
-                  </div>
-                  <span className="text-xs lg:text-base justify-self-end text-left sm:text-right whitespace-nowrap text-slate-800 pl-1">
-                    <span className={dayBounds.ended ? "hidden sm:inline" : ""}>
-                      المتبقي: {Math.max(0, Math.round(dayBounds.remainingPercent))}%
-                    </span>
-                    {dayBounds.ended && <span className="text-red-600 sm:hidden">انتهى اليوم الدراسي</span>}
+                  <span className="whitespace-nowrap text-slate-800">
+                    المتبقي: {Math.max(0, Math.round(dayBounds.remainingPercent))}%
                   </span>
                 </div>
-                <div className="relative h-1.5 sm:h-2 lg:h-2.5 w-full overflow-hidden rounded-full bg-slate-200/80 shadow-inner border border-white/80">
+                <div
+                  role="progressbar"
+                  aria-label="المتبقي من اليوم الدراسي"
+                  aria-valuemin={0}
+                  aria-valuemax={100}
+                  aria-valuenow={Math.max(0, Math.min(100, Math.round(dayBounds.remainingPercent)))}
+                  className="relative h-1.5 w-full overflow-hidden rounded-full border border-white/80 bg-slate-200/80 shadow-inner sm:h-2 lg:h-2.5"
+                >
                   <div
                     className="h-full transition-[width] duration-700 ease-out"
                     style={{
                       width: `${dayBounds.remainingPercent}%`,
                       background: "linear-gradient(90deg, #10b981 0%, #f59e0b 50%, #ef4444 100%)",
                     }}
-                    aria-label="شريط تقدم اليوم الدراسي"
                   />
                 </div>
               </div>
@@ -563,7 +353,31 @@ export const HomeClient = ({ initialData }: Props) => {
 
       <div role="status" className="text-center text-slate-700">
         {allCompleted && (
-          <p className="rounded-xl border border-emerald-200 bg-emerald-50 p-5 font-semibold">انتهت حصص اليوم</p>
+          <div className="relative overflow-hidden rounded-3xl border border-emerald-100 bg-gradient-to-b from-emerald-50/80 to-white px-6 py-5 shadow-sm sm:py-14">
+            <div
+              aria-hidden="true"
+              className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-white text-emerald-600 shadow-sm ring-4 ring-emerald-100/60 sm:mb-5 sm:h-20 sm:w-20 sm:ring-8"
+            >
+              <svg
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="1.7"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                className="h-6 w-6 sm:h-10 sm:w-10"
+              >
+                <path d="M20 11.1V12a8 8 0 1 1-4.7-7.3" />
+                <path d="m8 11 4 4 8-9" />
+              </svg>
+            </div>
+            <h2 className="text-xl font-bold text-emerald-950 sm:text-2xl">
+              انتهت حصص اليوم
+            </h2>
+            <p className="mt-1 text-sm leading-6 text-slate-500 sm:mt-2 sm:text-base sm:leading-7">
+              شكرًا لعطائكم، نتمنى لكم بقية يوم جميلة
+            </p>
+          </div>
         )}
         {todayPeriods.length === 0 && (
           <p className="rounded-xl border border-slate-200 bg-slate-50 p-5">لا توجد حصص في جدول هذا اليوم</p>
