@@ -75,6 +75,11 @@ const describeTermStatus = (term: TermStatus) => {
   return `المتبقي ${Math.max(0, term.remainingDays)} يوم`;
 };
 
+const badgeClassName =
+  "whitespace-nowrap rounded-lg px-2.5 py-1 text-center text-sm font-bold shadow sm:rounded-xl sm:px-4 sm:py-2 lg:text-base";
+const progressTrackClassName =
+  "relative h-1.5 w-full overflow-hidden rounded-full border border-white/80 bg-slate-200/80 shadow-inner sm:h-2 lg:h-2.5";
+
 export const HomeClient = ({ initialData }: Props) => {
   const [data, setData] = useState(initialData);
   const [now, setNow] = useState(() => new Date(initialData.nowIso));
@@ -215,6 +220,11 @@ export const HomeClient = ({ initialData }: Props) => {
     return Math.max(1, weeksSinceStart);
   })();
 
+  const termName = data.termStatus?.name.replace(
+    /\s+[0-9٠-٩۰-۹]{4}(?:\s*[-/–]\s*[0-9٠-٩۰-۹]{4})?\s*$/u,
+    "",
+  );
+
   return (
     <div className="space-y-6">
       <div className="space-y-2 sm:space-y-4">
@@ -224,46 +234,41 @@ export const HomeClient = ({ initialData }: Props) => {
           gregorianDate={data.gregorianDate}
           hijriDate={data.hijriDate}
         />
-        <div className="flex flex-col gap-2 rounded-2xl bg-white/70 backdrop-blur-md border border-slate-200 p-3 sm:p-4 shadow-sm">
+        <div className="grid grid-cols-[auto_minmax(0,1fr)] gap-x-3 gap-y-2 rounded-2xl bg-white/70 backdrop-blur-md border border-slate-200 p-3 sm:gap-x-4 sm:p-4 shadow-sm">
           {data.termStatus ? (
-            <div className="sm:rounded-xl sm:border sm:border-slate-200 sm:bg-white/70 sm:p-2.5 flex flex-col gap-1">
-              <div className="flex items-start justify-between gap-2">
-                <h3 className="min-w-0 text-sm font-bold text-slate-900">
-                  {data.termStatus.name}
-                </h3>
-                {termWeekNumber !== null ? (
-                  <span className="shrink-0 whitespace-nowrap sm:flex-1 sm:text-center text-xs sm:text-[11px] font-semibold text-slate-500">
-                    الأسبوع {termWeekNumber}
-                  </span>
-                ) : null}
-                <span
-                  className={`hidden sm:inline-flex rounded-full px-2.5 py-1 text-[11px] font-semibold whitespace-nowrap ${
-                    data.termStatus.status === "active"
-                      ? "bg-emerald-50 text-emerald-700 border border-emerald-200"
-                      : data.termStatus.status === "upcoming"
-                        ? "bg-amber-50 text-amber-700 border border-amber-200"
-                        : "bg-slate-100 text-slate-600 border border-slate-200"
-                  }`}
-                >
-                  {describeTermStatus(data.termStatus)}
+            <div className="col-span-2 grid grid-cols-subgrid items-center gap-y-2 sm:gap-y-3 sm:rounded-xl sm:border sm:border-slate-200 sm:bg-white/70 sm:p-4">
+              {termWeekNumber !== null ? (
+                <span className="col-span-2 text-center text-xs font-semibold text-slate-500">
+                  الأسبوع {termWeekNumber}
                 </span>
-              </div>
-              <div className="space-y-1">
-                <div className="flex items-center justify-between gap-2 text-xs sm:text-[11px] font-semibold text-slate-600">
+              ) : null}
+              <h3 className={`${badgeClassName} bg-slate-100 text-slate-700`}>
+                {termName}
+              </h3>
+              <div className="min-w-0 space-y-1 sm:space-y-2">
+                <div className="flex flex-wrap items-center justify-between gap-x-2 gap-y-1 text-[11px] font-semibold text-slate-500 sm:text-xs lg:text-sm">
                   <span className="min-w-0">
-                    <span className={data.termStatus.status === "active" ? "" : "hidden sm:inline"}>
-                      متبقي: {Math.max(0, data.termStatus.remainingDays)} من{" "}
-                      {Math.max(1, data.termStatus.totalDays)} يوم
-                    </span>
-                    {data.termStatus.status !== "active" && (
-                      <span className="sm:hidden">{describeTermStatus(data.termStatus)}</span>
+                    {data.termStatus.status === "active" ? (
+                      <>
+                        متبقي: {Math.max(0, data.termStatus.remainingDays)} من{" "}
+                        {Math.max(1, data.termStatus.totalDays)} يوم
+                      </>
+                    ) : (
+                      describeTermStatus(data.termStatus)
                     )}
                   </span>
                   <span className="text-slate-800 whitespace-nowrap">
                     {Math.max(0, Math.round(data.termStatus.remainingPercent))}%
                   </span>
                 </div>
-                <div className="relative h-1.5 sm:h-2 w-full overflow-hidden rounded-full bg-slate-100 border border-slate-200">
+                <div
+                  role="progressbar"
+                  aria-label="المتبقي من الترم الدراسي"
+                  aria-valuemin={0}
+                  aria-valuemax={100}
+                  aria-valuenow={Math.max(0, Math.min(100, Math.round(data.termStatus.remainingPercent)))}
+                  className={progressTrackClassName}
+                >
                   <div
                     className="h-full transition-[width] duration-700 ease-out"
                     style={{
@@ -274,14 +279,13 @@ export const HomeClient = ({ initialData }: Props) => {
                       background:
                         "linear-gradient(90deg, #22c55e 0%, #f97316 50%, #ef4444 100%)",
                     }}
-                    aria-label="شريط تقدم الترم الدراسي"
                   />
                 </div>
               </div>
             </div>
           ) : null}
 
-          <div className="grid grid-cols-[auto_minmax(0,1fr)] items-center gap-x-3 gap-y-2 border-slate-200 [&:not(:first-child)]:border-t [&:not(:first-child)]:pt-2 sm:[&:not(:first-child)]:pt-4 sm:gap-x-4 sm:gap-y-3 sm:rounded-xl sm:bg-indigo-50/70 sm:border sm:border-indigo-100 sm:p-4">
+          <div className="col-span-2 grid grid-cols-subgrid items-center gap-y-2 border-slate-200 [&:not(:first-child)]:border-t [&:not(:first-child)]:pt-2 sm:[&:not(:first-child)]:pt-4 sm:gap-y-3 sm:rounded-xl sm:bg-indigo-50/70 sm:border sm:border-indigo-100 sm:p-4">
             <div className="col-span-2 flex items-baseline justify-center gap-2 text-slate-800">
               <span className="text-[10px] text-slate-500 sm:text-xs">الآن</span>
               <span className="whitespace-nowrap text-base font-bold tabular-nums text-slate-900 sm:text-lg lg:text-xl">
@@ -295,7 +299,7 @@ export const HomeClient = ({ initialData }: Props) => {
               </span>
             </div>
 
-            <span className="whitespace-nowrap rounded-lg bg-indigo-600 px-2.5 py-1 text-sm font-bold text-white shadow sm:rounded-xl sm:px-4 sm:py-2 lg:text-base">
+            <span className={`${badgeClassName} bg-indigo-600 text-white`}>
               {dayTypeLabel(data.dayType)}
             </span>
 
@@ -315,7 +319,7 @@ export const HomeClient = ({ initialData }: Props) => {
                   aria-valuemin={0}
                   aria-valuemax={100}
                   aria-valuenow={Math.max(0, Math.min(100, Math.round(dayBounds.remainingPercent)))}
-                  className="relative h-1.5 w-full overflow-hidden rounded-full border border-white/80 bg-slate-200/80 shadow-inner sm:h-2 lg:h-2.5"
+                  className={progressTrackClassName}
                 >
                   <div
                     className="h-full transition-[width] duration-700 ease-out"
