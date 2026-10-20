@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 
-import { dayTypeLabel, parseTimeInTimeZone } from "@/lib/date-utils";
+import { dayTypeLabel, parseTimeInTimeZone, TARGET_TIME_ZONE } from "@/lib/date-utils";
 import { type TermStatus } from "@/lib/terms";
 
 import { HeaderCard } from "./HeaderCard";
@@ -79,6 +79,19 @@ const badgeClassName =
   "whitespace-nowrap rounded-lg px-2.5 py-1 text-center text-sm font-bold shadow sm:rounded-xl sm:px-4 sm:py-2 lg:text-base";
 const progressTrackClassName =
   "relative h-1.5 w-full overflow-hidden rounded-full border border-white/80 bg-slate-200/80 shadow-inner sm:h-2 lg:h-2.5";
+
+const weekdayFormatter = new Intl.DateTimeFormat("ar-SA", {
+  weekday: "long",
+  timeZone: TARGET_TIME_ZONE,
+});
+const clockFormatter = new Intl.DateTimeFormat("ar-EG", {
+  hour: "2-digit",
+  minute: "2-digit",
+  second: "2-digit",
+  hour12: true,
+  numberingSystem: "latn",
+  timeZone: TARGET_TIME_ZONE,
+});
 
 export const HomeClient = ({ initialData }: Props) => {
   const [data, setData] = useState(initialData);
@@ -233,6 +246,8 @@ export const HomeClient = ({ initialData }: Props) => {
           managerName={data.header.managerName}
           gregorianDate={data.gregorianDate}
           hijriDate={data.hijriDate}
+          gregorianMonthNumber={data.gregorianMonthNumber}
+          hijriMonthNumber={data.hijriMonthNumber}
         />
         <div className="grid grid-cols-[auto_minmax(0,1fr)] gap-x-3 gap-y-2 rounded-2xl bg-white/70 backdrop-blur-md border border-slate-200 p-3 sm:gap-x-4 sm:p-4 shadow-sm">
           {data.termStatus ? (
@@ -287,15 +302,13 @@ export const HomeClient = ({ initialData }: Props) => {
 
           <div className="col-span-2 grid grid-cols-subgrid items-center gap-y-2 border-slate-200 [&:not(:first-child)]:border-t [&:not(:first-child)]:pt-2 sm:[&:not(:first-child)]:pt-4 sm:gap-y-3 sm:rounded-xl sm:bg-indigo-50/70 sm:border sm:border-indigo-100 sm:p-4">
             <div className="col-span-2 flex items-baseline justify-center gap-2 text-slate-800">
+              <span className="whitespace-nowrap text-xs font-semibold sm:text-sm">
+                {weekdayFormatter.format(now)}
+              </span>
+              <span aria-hidden="true" className="text-slate-400">·</span>
               <span className="text-[10px] text-slate-500 sm:text-xs">الآن</span>
               <span className="whitespace-nowrap text-base font-bold tabular-nums text-slate-900 sm:text-lg lg:text-xl">
-                {new Intl.DateTimeFormat("ar-EG", {
-                  hour: "2-digit",
-                  minute: "2-digit",
-                  second: "2-digit",
-                  hour12: true,
-                  timeZone: "Asia/Riyadh",
-                }).format(now)}
+                {clockFormatter.format(now)}
               </span>
             </div>
 
