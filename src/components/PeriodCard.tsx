@@ -77,6 +77,13 @@ export const PeriodCard = ({ period, now, start: resolvedStart, end: resolvedEnd
         ? "bg-gradient-to-br from-sky-100 via-blue-100 to-blue-200 border border-blue-300 text-blue-950 shadow-[0_16px_36px_-16px_rgba(59,130,246,0.4)] ring-1 ring-blue-300/80"
         : "bg-slate-100/80 border border-slate-200 text-slate-700 shadow-[0_12px_28px_-18px_rgba(148,163,184,0.35)] ring-1 ring-slate-200/70";
 
+  const titleAccent =
+    status === "current"
+      ? "border-emerald-200/70 bg-emerald-100/70 text-emerald-950"
+      : status === "upcoming"
+        ? "border-blue-300/60 bg-blue-200/60 text-blue-950"
+        : "border-slate-300/60 bg-slate-200/70 text-slate-800";
+
   const displayStart = formatTime12(start);
   const displayEnd = formatTime12(end);
   const totalMs = Math.max(1, end.getTime() - start.getTime());
@@ -109,8 +116,16 @@ export const PeriodCard = ({ period, now, start: resolvedStart, end: resolvedEnd
           className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_50%_40%,rgba(16,185,129,0.18),transparent_60%)]"
         />
       )}
-      <div className="flex items-center justify-center">
-        <span className="text-center text-xs sm:text-sm md:text-lg font-semibold md:font-bold">
+      {/* Paint the title strip outside the row without changing its original height. */}
+      <div className="relative flex h-4 min-w-0 items-center justify-center sm:h-5 md:h-7">
+        <div
+          aria-hidden="true"
+          className={`pointer-events-none absolute -inset-x-3 -top-3 -bottom-1.5 border-b sm:-inset-x-4 sm:-top-4 sm:-bottom-2 md:-inset-x-5 md:-top-5 ${titleAccent}`}
+        />
+        <span
+          title={displayName}
+          className="relative block w-full truncate text-center text-sm/4 font-extrabold sm:text-base/5 md:text-lg/7"
+        >
           {displayName}
         </span>
       </div>
